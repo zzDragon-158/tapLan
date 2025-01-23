@@ -104,6 +104,27 @@ void TapLanServer::recvFromSocketAndForwardToTap() {
         if (writeBytes == -1) {
             std::cerr << "Error writing to TAP device." << std::endl;
         }
+        uint64_t macDst = 0;
+        memcpy(&macDst, eH->ether_dhost, 6);
+        if (macDst == 0xffffffffffff) {
+            // need broadcast
+            for (auto it = macToIPv6Map.begin(); it != macToIPv6Map.end(); ++it) {
+                int sentBytes = sendto(udp_fd, udpRxBuffer, recvBytes, 0, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
+                if (sentBytes == -1) {
+                    std::cerr << "Error sending to UDP socket." << std::endl;
+                }
+            }
+        } else {
+            auto it = macToIPv6Map.find(macDst);
+            if (it != macToIPv6Map.end()) {
+                int sentBytes = sendto(udp_fd, udpRxBuffer, recvBytes, 0, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
+                if (sentBytes == -1) {
+                    std::cerr << "Error sending to UDP socket." << std::endl;
+                }
+            } else {
+                std::cerr << "Error can not find mac " << std::hex << macDst << std::endl;
+            }
+        }
     } else {
         std::cerr << "Error receiving from UDP socket." << std::endl;
     }
