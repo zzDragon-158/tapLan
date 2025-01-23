@@ -15,8 +15,8 @@ public:
     ~TapLanClient();
     bool openTapDevice(const char* devName);
     bool openUdpSocket(uint16_t port);
-    void recvfromSocketAndForwardToTap();
-    void readfromTapAndSendToSocket();
+    void recvFromSocketAndForwardToTap();
+    void readFromTapAndSendToSocket();
     void main();
     void start();
     void stop();

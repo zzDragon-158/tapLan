@@ -21,7 +21,7 @@
 TapLanServer::TapLanServer(uint16_t serverPort) {   // server
     tap_fd = -1;
     udp_fd = -1;
-    run_flag = openTapDevice("tapLanServer") && openUdpSocket(serverPort);
+    run_flag = openTapDevice("tapLan") && openUdpSocket(serverPort);
 }
 
 TapLanServer::~TapLanServer() {
@@ -99,7 +99,9 @@ void TapLanServer::recvFromSocketAndForwardToTap() {
         struct ether_header* eH = (struct ether_header *)udpRxBuffer;
         uint64_t macSrc = 0;
         memcpy(&macSrc, eH->ether_shost, 6);
-        macToIPv6Map[macSrc] = ipv6SrcAddr;
+        if (eH->ether_type == htons(ETHERTYPE_ARP) && macToIPv6Map.find(macSrc) == macToIPv6Map.end()) {
+            macToIPv6Map[macSrc] = ipv6SrcAddr;
+        }
         int writeBytes = write(tap_fd, udpRxBuffer, recvBytes);
         if (writeBytes == -1) {
             std::cerr << "Error writing to TAP device." << std::endl;
@@ -121,8 +123,6 @@ void TapLanServer::recvFromSocketAndForwardToTap() {
                 if (sentBytes == -1) {
                     std::cerr << "Error sending to UDP socket." << std::endl;
                 }
-            } else {
-                std::cerr << "Error can not find mac " << std::hex << macDst << std::endl;
             }
         }
     } else {

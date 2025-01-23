@@ -20,7 +20,7 @@
 TapLanClient::TapLanClient(const char* serverAddr, uint16_t serverPort, const uint16_t clientPort) {
     tap_fd = -1;
     udp_fd = -1;
-    run_flag = openTapDevice("tapLanClient") && openUdpSocket(clientPort);
+    run_flag = openTapDevice("tapLan") && openUdpSocket(clientPort);
     memset(&gatewayAddr, 0, sizeof(gatewayAddr));
     gatewayAddr.sin6_family = AF_INET6;
     inet_pton(AF_INET6, serverAddr, &gatewayAddr.sin6_addr);
@@ -73,7 +73,7 @@ bool TapLanClient::openUdpSocket(uint16_t sin6_port) {
     return true;
 }
 
-void TapLanClient::readfromTapAndSendToSocket() {
+void TapLanClient::readFromTapAndSendToSocket() {
     uint8_t tapTxBuffer[1500];
     int readBytes = read(tap_fd, tapTxBuffer, sizeof(tapTxBuffer));
     if (readBytes > 0) {
@@ -86,7 +86,7 @@ void TapLanClient::readfromTapAndSendToSocket() {
     }
 }
 
-void TapLanClient::recvfromSocketAndForwardToTap() {
+void TapLanClient::recvFromSocketAndForwardToTap() {
     uint8_t udpRxBuffer[65536];
     int recvBytes = recvfrom(udp_fd, udpRxBuffer, sizeof(udpRxBuffer), 0, NULL, NULL);
     if (recvBytes > 0) {
@@ -115,10 +115,10 @@ void TapLanClient::main() {
             // no events timeout
         } else {
             if (pfds[0].revents & POLLIN) {     // tap
-                readfromTapAndSendToSocket();
+                readFromTapAndSendToSocket();
             }
             if (pfds[1].revents & POLLIN) {     // udp
-                recvfromSocketAndForwardToTap();
+                recvFromSocketAndForwardToTap();
             }
         }
     }
