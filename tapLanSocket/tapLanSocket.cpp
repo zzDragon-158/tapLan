@@ -113,6 +113,10 @@ bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port) {
         inet_ntop(AF_INET6, &sockAddr.sin6_addr, ipv6Addr, sizeof(ipv6Addr));
         printf("Create udp socket bind to %s:%u\n", ipv6Addr, ntohs(sockAddr.sin6_port));
     }
+    int udpBufferSize = 1024 * 1024;
+    if (setsockopt(udp_fd, SOL_SOCKET, SO_RCVBUF, (char*)&udpBufferSize, sizeof(udpBufferSize))) {
+        fprintf(stderr, "Can not set udpBufferSize to %d\n", udpBufferSize);
+    }
     udp_pfd.fd = udp_fd;
     udp_pfd.events = POLLIN;
     return true;

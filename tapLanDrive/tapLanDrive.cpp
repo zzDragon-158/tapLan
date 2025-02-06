@@ -71,44 +71,38 @@ bool tapLanCloseTapDevice() {
 }
 
 ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen) {
-    while (true) {
-        ResetEvent(tapLanTapDevice.overlapWrite.hEvent);
-        DWORD writeSize;
-        if (WriteFile(tapLanTapDevice.handle, buf, bufLen, &writeSize, &tapLanTapDevice.overlapWrite)) {
-            return writeSize;
-        }
-        DWORD lastError = GetLastError();
-        switch (lastError) {
+    ResetEvent(tapLanTapDevice.overlapWrite.hEvent);
+    DWORD writeBytes;
+    if (WriteFile(tapLanTapDevice.handle, buf, bufLen, &writeBytes, &tapLanTapDevice.overlapWrite)) {
+        return writeBytes;
+    }
+    DWORD lastError = GetLastError();
+    switch (lastError) {
         case ERROR_IO_PENDING:
             WaitForSingleObject(tapLanTapDevice.overlapWrite.hEvent, INFINITE);
-            GetOverlappedResult(tapLanTapDevice.handle, &tapLanTapDevice.overlapWrite, &writeSize, FALSE);
-            return writeSize;
-            break;
+            GetOverlappedResult(tapLanTapDevice.handle, &tapLanTapDevice.overlapWrite, &writeBytes, FALSE);
+            return writeBytes;
         default:
             fprintf(stderr, "GetLastError %u\n", lastError);
             return -100;
-        }
     }
 }
 
 ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen, int timeout) {
-    while (true) {
-        ResetEvent(tapLanTapDevice.overlapRead.hEvent);
-        DWORD readSize;
-        if (ReadFile(tapLanTapDevice.handle, buf, bufLen, &readSize, &tapLanTapDevice.overlapRead)) {
-            return readSize;
-        }
-        DWORD lastError = GetLastError();
-        switch (lastError) {
+    ResetEvent(tapLanTapDevice.overlapRead.hEvent);
+    DWORD readBytes;
+    if (ReadFile(tapLanTapDevice.handle, buf, bufLen, &readBytes, &tapLanTapDevice.overlapRead)) {
+        return readBytes;
+    }
+    DWORD lastError = GetLastError();
+    switch (lastError) {
         case ERROR_IO_PENDING:
             WaitForSingleObject(tapLanTapDevice.overlapRead.hEvent, INFINITE);
-            GetOverlappedResult(tapLanTapDevice.handle, &tapLanTapDevice.overlapRead, &readSize, FALSE);
-            return readSize;
-            break;
+            GetOverlappedResult(tapLanTapDevice.handle, &tapLanTapDevice.overlapRead, &readBytes, FALSE);
+            return readBytes;
         default:
             fprintf(stderr, "GetLastError %u\n", lastError);
             return -100;
-        }
     }
 }
 
