@@ -60,7 +60,7 @@ void TapLan::readFromTapAndSendToSocket() {
             // timeout
             continue;
         } else {
-            std::cerr << "Error reading from TAP device." << std::endl;
+            fprintf(stderr, "Error reading from TAP device, readBytes %d\n", readBytes);
         }
     }
 }
@@ -71,7 +71,7 @@ void TapLan::recvFromSocketAndForwardToTap() {
         struct sockaddr_in6 srcAddr;
         socklen_t srcAddrLen = sizeof(srcAddr);
         ssize_t recvBytes = tapLanRecvFromUdpIPv6Socket(udpRxBuffer, sizeof(udpRxBuffer), (struct sockaddr*)&srcAddr, &srcAddrLen, 100);
-        if (recvBytes >= ETHERNET_HEADER_LEN) {
+        if (recvBytes >= 0) {
             ssize_t writeBytes = tapLanWriteToTapDevice(udpRxBuffer, recvBytes);
             if (writeBytes == -1) {
                 std::cerr << "Error writing to TAP device." << std::endl;
@@ -80,7 +80,7 @@ void TapLan::recvFromSocketAndForwardToTap() {
                 struct ether_header* eH = (struct ether_header *)udpRxBuffer;
                 uint64_t macSrc = 0;
                 memcpy(&macSrc, eH->ether_shost, 6);
-                if (eH->ether_type == htons(ETHERTYPE_ARP) && macToIPv6Map.find(macSrc) == macToIPv6Map.end()) {
+                if (eH->ether_type == htons(ETHERTYPE_ARP)) {
                     macToIPv6Map[macSrc] = srcAddr;
                 }
                 uint64_t macDst = 0;
@@ -106,7 +106,7 @@ void TapLan::recvFromSocketAndForwardToTap() {
             // timeout
             continue;
         } else {
-            std::cerr << "Error receiving from UDP socket." << std::endl;
+            fprintf(stderr, "Error receiving from UDP socket, recvBytes %d\n", recvBytes);
         }
     }
 }
