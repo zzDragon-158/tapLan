@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.24)
+project(tapLan)
+find_library(WS2_32_LIBRARY ws2_32)
+aux_source_directory(. MAIN)
+add_subdirectory(tapLanDrive)
+add_subdirectory(tapLanSocket)
+add_executable(tapLan ${MAIN})
+target_link_libraries(tapLan tapLanDrive tapLanSocket ${WS2_32_LIBRARY})
