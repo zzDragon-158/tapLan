@@ -16,7 +16,7 @@
 
 ## 运行
 ### 创建TAP设备
-windows安装WinTapDrive文件夹下的驱动，linux运行createTapLanDevice.sh脚本
+windows安装WinTapDrive文件夹下的驱动(OpenVPN的开源驱动)，linux运行createTapLanDevice.sh脚本
 
 创建后为TAP设备设置好静态IPv4地址，注意IPv4地址不要重复
 ### 运行程序
