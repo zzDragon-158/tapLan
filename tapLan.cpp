@@ -57,7 +57,7 @@ void TapLan::readFromTapAndSendToSocket() {
                 }
             }
         } else {
-            fprintf(stderr, "[ERROR] reading from TAP device, readBytes %d\n", readBytes);
+            fprintf(stderr, "[ERROR] reading from TAP device, readBytes %ld\n", readBytes);
         }
     }
 }
@@ -92,7 +92,7 @@ void TapLan::recvFromSocketAndForwardToTap() {
                 } else {
                     auto it = macToIPv6Map.find(macDst);
                     if (it != macToIPv6Map.end()) {
-                        int sendBytes = tapLanSendToUdpIPv6Socket(udpRxBuffer, recvBytes, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
+                        ssize_t sendBytes = tapLanSendToUdpIPv6Socket(udpRxBuffer, recvBytes, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
                         if (sendBytes < recvBytes) {
                             fprintf(stderr, "[ERROR] sending to UDP socket, sendBytes %ld\n", sendBytes);
                         }
@@ -100,7 +100,7 @@ void TapLan::recvFromSocketAndForwardToTap() {
                 }
             }
         } else {
-            fprintf(stderr, "[ERROR] receiving from UDP socket, recvBytes %d\n", recvBytes);
+            fprintf(stderr, "[ERROR] receiving from UDP socket, recvBytes %ld\n", recvBytes);
         }
     }
 }

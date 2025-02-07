@@ -119,7 +119,7 @@ bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port) {
         fprintf(stderr, "[Error] can not set udpRecvBufferSize to %d\n", udpBufferSize);
     } else {
         int actualUdpRecvBufferSizeSize;
-        int actualUdpRecvBufferSizeSizeLen = sizeof(actualUdpRecvBufferSizeSize);
+        socklen_t actualUdpRecvBufferSizeSizeLen = sizeof(actualUdpRecvBufferSizeSize);
         if (getsockopt(udp_fd, SOL_SOCKET, SO_RCVBUF, (char*)&actualUdpRecvBufferSizeSize, &actualUdpRecvBufferSizeSizeLen) == 0) {
             printf("[INFO] udpRecvBufferSize has been set to %d\n", actualUdpRecvBufferSizeSize);
         }
@@ -128,7 +128,7 @@ bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port) {
         fprintf(stderr, "[Error] can not set udpSendBufferSize to %d\n", udpBufferSize);
     } else {
         int actualUdpSendBufferSizeSize;
-        int actualUdpSendBufferSizeSizeLen = sizeof(actualUdpSendBufferSizeSize);
+        socklen_t actualUdpSendBufferSizeSizeLen = sizeof(actualUdpSendBufferSizeSize);
         if (getsockopt(udp_fd, SOL_SOCKET, SO_SNDBUF, (char*)&actualUdpSendBufferSizeSize, &actualUdpSendBufferSizeSizeLen) == 0) {
             printf("[INFO] udpSendBufferSize has been set to %d\n", actualUdpSendBufferSizeSize);
         }
