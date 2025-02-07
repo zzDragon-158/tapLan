@@ -34,7 +34,7 @@ bool TapLan::openUdpSocket(uint16_t sin6_port) {
 void TapLan::readFromTapAndSendToSocket() {
     uint8_t tapRxBuffer[65535];
     while (run_flag) {
-        ssize_t readBytes = tapLanReadFromTapDevice(tapRxBuffer, sizeof(tapRxBuffer), 100);
+        ssize_t readBytes = tapLanReadFromTapDevice(tapRxBuffer, sizeof(tapRxBuffer));
         if (readBytes >= ETHERNET_HEADER_LEN) {
             sockaddr_in6* pDstAddr = nullptr;
             if (isServer) {
@@ -56,9 +56,6 @@ void TapLan::readFromTapAndSendToSocket() {
                     fprintf(stderr, "[ERROR] sending to UDP socket, sendBytes %ld\n", sendBytes);
                 }
             }
-        } else if (readBytes == -100) {
-            // timeout
-            continue;
         } else {
             fprintf(stderr, "[ERROR] reading from TAP device, readBytes %d\n", readBytes);
         }
@@ -70,7 +67,7 @@ void TapLan::recvFromSocketAndForwardToTap() {
     while (run_flag) {
         struct sockaddr_in6 srcAddr;
         socklen_t srcAddrLen = sizeof(srcAddr);
-        ssize_t recvBytes = tapLanRecvFromUdpIPv6Socket(udpRxBuffer, sizeof(udpRxBuffer), (struct sockaddr*)&srcAddr, &srcAddrLen, 100);
+        ssize_t recvBytes = tapLanRecvFromUdpIPv6Socket(udpRxBuffer, sizeof(udpRxBuffer), (struct sockaddr*)&srcAddr, &srcAddrLen);
         if (recvBytes >= 0) {
             ssize_t writeBytes = tapLanWriteToTapDevice(udpRxBuffer, recvBytes);
             if (writeBytes < recvBytes) {
@@ -102,9 +99,6 @@ void TapLan::recvFromSocketAndForwardToTap() {
                     }
                 }
             }
-        } else if (recvBytes == -100) {
-            // timeout
-            continue;
         } else {
             fprintf(stderr, "[ERROR] receiving from UDP socket, recvBytes %d\n", recvBytes);
         }

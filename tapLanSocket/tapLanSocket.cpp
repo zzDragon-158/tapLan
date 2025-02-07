@@ -4,7 +4,6 @@ const int udpBufferSize = 1024 * 1024 * 16;
 
 #ifdef _WIN32
 static int udp_fd;
-WSAPOLLFD udp_pfd;
 
 bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port) {
     WSADATA wsaData;
@@ -32,9 +31,21 @@ bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port) {
         }
         if (setsockopt(udp_fd, SOL_SOCKET, SO_RCVBUF, (char*)&udpBufferSize, sizeof(udpBufferSize))) {
             fprintf(stderr, "[ERROR] can not set udpRecvBufferSize to %d\n", udpBufferSize);
+        } else {
+            int actualUdpRecvBufferSizeSize;
+            int actualUdpRecvBufferSizeSizeLen = sizeof(actualUdpRecvBufferSizeSize);
+            if (getsockopt(udp_fd, SOL_SOCKET, SO_RCVBUF, (char*)&actualUdpRecvBufferSizeSize, &actualUdpRecvBufferSizeSizeLen) == 0) {
+                printf("[INFO] udpRecvBufferSize has been set to %d\n", actualUdpRecvBufferSizeSize);
+            }
         }
         if (setsockopt(udp_fd, SOL_SOCKET, SO_SNDBUF, (char*)&udpBufferSize, sizeof(udpBufferSize))) {
             fprintf(stderr, "[ERROR] can not set udpSendBufferSize to %d\n", udpBufferSize);
+        } else {
+            int actualUdpSendBufferSizeSize;
+            int actualUdpSendBufferSizeSizeLen = sizeof(actualUdpSendBufferSizeSize);
+            if (getsockopt(udp_fd, SOL_SOCKET, SO_SNDBUF, (char*)&actualUdpSendBufferSizeSize, &actualUdpSendBufferSizeSizeLen) == 0) {
+                printf("[INFO] udpSendBufferSize has been set to %d\n", actualUdpSendBufferSizeSize);
+            }
         }
     }
     /* windows bug: udp socket 10054 */ {
@@ -56,8 +67,6 @@ bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port) {
         inet_ntop(AF_INET6, &sockAddr.sin6_addr, ipv6Addr, sizeof(ipv6Addr));
         printf("[INFO] create udp socket bind to [%s]:%u\n", ipv6Addr, ntohs(sockAddr.sin6_port));
     }
-    udp_pfd.fd = udp_fd;
-    udp_pfd.events = POLLIN;
     return true;
 }
 
@@ -71,23 +80,12 @@ ssize_t tapLanSendToUdpIPv6Socket(const void* buf, size_t bufLen, const struct s
     return sendto(udp_fd, (const char*)buf, bufLen, 0, dstAddr, addrLen);
 }
 
-ssize_t tapLanRecvFromUdpIPv6Socket(void* buf, size_t bufLen, struct sockaddr* srcAddr, socklen_t* addrLen, int timeout) {
-    int result = WSAPoll(&udp_pfd, 1, timeout);
-    if (result == 1) {
-        if (udp_pfd.revents & POLLIN) {
-            return recvfrom(udp_fd, (char*)buf, bufLen, 0, srcAddr, addrLen);
-        } else {
-            return -1;
-        }
-    } else if (result == 0) {
-        return -100;
-    }
-    return -1;
+ssize_t tapLanRecvFromUdpIPv6Socket(void* buf, size_t bufLen, struct sockaddr* srcAddr, socklen_t* addrLen) {
+    return recvfrom(udp_fd, (char*)buf, bufLen, 0, srcAddr, addrLen);
 }
 
 #else
 static int udp_fd;
-static struct pollfd udp_pfd;
 
 bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port) {
     udp_fd = socket(AF_INET6, SOCK_DGRAM, 0);
@@ -119,12 +117,22 @@ bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port) {
     }
     if (setsockopt(udp_fd, SOL_SOCKET, SO_RCVBUF, (char*)&udpBufferSize, sizeof(udpBufferSize))) {
         fprintf(stderr, "[Error] can not set udpRecvBufferSize to %d\n", udpBufferSize);
+    } else {
+        int actualUdpRecvBufferSizeSize;
+        int actualUdpRecvBufferSizeSizeLen = sizeof(actualUdpRecvBufferSizeSize);
+        if (getsockopt(udp_fd, SOL_SOCKET, SO_RCVBUF, (char*)&actualUdpRecvBufferSizeSize, &actualUdpRecvBufferSizeSizeLen) == 0) {
+            printf("[INFO] udpRecvBufferSize has been set to %d\n", actualUdpRecvBufferSizeSize);
+        }
     }
     if (setsockopt(udp_fd, SOL_SOCKET, SO_SNDBUF, (char*)&udpBufferSize, sizeof(udpBufferSize))) {
         fprintf(stderr, "[Error] can not set udpSendBufferSize to %d\n", udpBufferSize);
+    } else {
+        int actualUdpSendBufferSizeSize;
+        int actualUdpSendBufferSizeSizeLen = sizeof(actualUdpSendBufferSizeSize);
+        if (getsockopt(udp_fd, SOL_SOCKET, SO_SNDBUF, (char*)&actualUdpSendBufferSizeSize, &actualUdpSendBufferSizeSizeLen) == 0) {
+            printf("[INFO] udpSendBufferSize has been set to %d\n", actualUdpSendBufferSizeSize);
+        }
     }
-    udp_pfd.fd = udp_fd;
-    udp_pfd.events = POLLIN;
     return true;
 }
 
@@ -137,18 +145,8 @@ ssize_t tapLanSendToUdpIPv6Socket(const void* buf, size_t bufLen, const struct s
     return sendto(udp_fd, buf, bufLen, 0, dstAddr, addrLen);
 }
 
-ssize_t tapLanRecvFromUdpIPv6Socket(void* buf, size_t bufLen, struct sockaddr* srcAddr, socklen_t* addrLen, int timeout) {
-    int result = poll(&udp_pfd, 1, timeout);
-    if (result == 1) {
-        if (udp_pfd.revents & POLLIN) {
-            return recvfrom(udp_fd, buf, bufLen, 0, srcAddr, addrLen);
-        } else {
-            return -1;
-        }
-    } else if (result == 0) {
-        return -100;
-    }
-    return -1;
+ssize_t tapLanRecvFromUdpIPv6Socket(void* buf, size_t bufLen, struct sockaddr* srcAddr, socklen_t* addrLen) {
+    return recvfrom(udp_fd, buf, bufLen, 0, srcAddr, addrLen);
 }
 
 #endif

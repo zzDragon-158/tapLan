@@ -36,4 +36,4 @@ struct ether_header {
 bool tapLanOpenTapDevice(const char* devName);
 bool tapLanCloseTapDevice();
 ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen);
-ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen, int timeout);
+ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen);
