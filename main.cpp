@@ -28,7 +28,6 @@ int main(int argc, char* argv[]) {
                     fprintf(stderr, "The input IPV6 address is invalid\n");
                     return 1;
                 }
-                printf("serverAddr: %s\n", serverAddr);
                 break;
             case 'p':
                 port = atoi(optarg);
@@ -36,7 +35,6 @@ int main(int argc, char* argv[]) {
                     fprintf(stderr, "port range 0-65535");
                     return 1;
                 }
-                printf("port: %u\n", port);
                 break;
             case 'h':
                 printf("Usage as server: %s [-s] [-p <server port>]\n", argv[0]);
@@ -49,6 +47,7 @@ int main(int argc, char* argv[]) {
         pTapLan = new TapLan(port);
         pTapLan->start();
     } else {
+        printf("server [%s]:%u\n", serverAddr, port);
         pTapLan = new TapLan(serverAddr, port);
         pTapLan->start();
     }

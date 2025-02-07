@@ -27,8 +27,8 @@ bool tapLanOpenTapDevice(const char* devName) {
     bool ret = false;
     HKEY openkey0;
     // 获取网络适配器列表
-    if (int rc = RegOpenKeyExA(HKEY_LOCAL_MACHINE, NETWORK_CONNECTIONS_KEY, 0, KEY_READ, &openkey0)) {
-        fprintf(stderr, "Unable to read registry: [rc = %d]\n", rc);
+    if (LONG rc = RegOpenKeyExA(HKEY_LOCAL_MACHINE, NETWORK_CONNECTIONS_KEY, 0, KEY_READ, &openkey0)) {
+        fprintf(stderr, "[ERROR] unable to read registry, RegOpenKeyExA %d\n", rc);
         return false;
     }
     // 遍历注册表目录 NETWORK_CONNECTIONS_KEY 下的所有网络适配器
@@ -54,6 +54,7 @@ bool tapLanOpenTapDevice(const char* devName) {
                 DeviceIoControl(tapLanTapDevice.handle, TAP_IOCTL_SET_MEDIA_STATUS,
                     &tapLanTapDevice.mediaStatus, tapLanTapDevice.mediaStatusLen,
                     &tapLanTapDevice.mediaStatus, tapLanTapDevice.mediaStatusLen, &tapLanTapDevice.mediaStatusLen, nullptr);
+                printf("[INFO] TAP device [%s] opened successfully\n", tapLanTapDevice.adapterName);
                 ret = true;
                 break;
             } else {
@@ -83,8 +84,8 @@ ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen) {
             GetOverlappedResult(tapLanTapDevice.handle, &tapLanTapDevice.overlapWrite, &writeBytes, FALSE);
             return writeBytes;
         default:
-            fprintf(stderr, "GetLastError %u\n", lastError);
-            return -100;
+            fprintf(stderr, "[ERROR] writting to tap device, GetLastError %u\n", lastError);
+            return -1;
     }
 }
 
@@ -95,15 +96,20 @@ ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen, int timeout) {
         return readBytes;
     }
     DWORD lastError = GetLastError();
-    switch (lastError) {
-        case ERROR_IO_PENDING:
-            WaitForSingleObject(tapLanTapDevice.overlapRead.hEvent, INFINITE);
+    if (lastError != ERROR_IO_PENDING) {
+        fprintf(stderr, "[ERROR] writting to tap device, GetLastError %u\n", lastError);
+        return -1;
+    }
+    switch (WaitForSingleObject(tapLanTapDevice.overlapRead.hEvent, timeout)) {
+        case WAIT_OBJECT_0:
             GetOverlappedResult(tapLanTapDevice.handle, &tapLanTapDevice.overlapRead, &readBytes, FALSE);
             return readBytes;
-        default:
-            fprintf(stderr, "GetLastError %u\n", lastError);
+        case WAIT_TIMEOUT:
             return -100;
+        default:
+            break;
     }
+    return -1;
 }
 
 #else
@@ -127,7 +133,7 @@ bool tapLanOpenTapDevice(const char* devName) {
         close(tap_fd);
         return false;
     }
-    printf("TAP device %s opened successfully\n", ifr.ifr_name);
+    printf("[INFO] TAP device [%s] opened successfully\n", ifr.ifr_name);
     tap_pfd.fd = tap_fd;
     tap_pfd.events = POLLIN;
     return true;

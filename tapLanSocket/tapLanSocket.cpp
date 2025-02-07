@@ -1,5 +1,7 @@
 #include "tapLanSocket.hpp"
 
+const int udpBufferSize = 1024 * 1024 * 16;
+
 #ifdef _WIN32
 static int udp_fd;
 WSAPOLLFD udp_pfd;
@@ -7,12 +9,12 @@ WSAPOLLFD udp_pfd;
 bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port) {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        fprintf(stderr, "WSAStartup failed\n");
+        fprintf(stderr, "[ERROR] WSAStartup failed\n");
         return false;
     }
     udp_fd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
     if (udp_fd == INVALID_SOCKET) {
-        fprintf(stderr, "Can not create socket with WSAGetLastError %d\n", WSAGetLastError());
+        fprintf(stderr, "[ERROR] can not create socket with WSAGetLastError %d\n", WSAGetLastError());
         return false;
     }
     /* bind udp socket */ {
@@ -24,20 +26,22 @@ bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port) {
         char ipv6Addr[INET6_ADDRSTRLEN] = {'\0'};
         inet_ntop(AF_INET6, &sa.sin6_addr, ipv6Addr, sizeof(ipv6Addr));
         if (bind(udp_fd, (sockaddr*)(&sa), sizeof(sockaddr_in6)) == SOCKET_ERROR) {
-            fprintf(stderr, "Can not bind to %s:%u with WSAGetLastError %d\n", ipv6Addr, ntohs(sa.sin6_port), WSAGetLastError());
+            fprintf(stderr, "[ERROR] can not bind to %s:%u with WSAGetLastError %d\n", ipv6Addr, ntohs(sa.sin6_port), WSAGetLastError());
             closesocket(udp_fd);
             return false;
         }
-        int udpBufferSize = 1024 * 1024;
         if (setsockopt(udp_fd, SOL_SOCKET, SO_RCVBUF, (char*)&udpBufferSize, sizeof(udpBufferSize))) {
-            fprintf(stderr, "Can not set udpBufferSize to %d\n", udpBufferSize);
+            fprintf(stderr, "[ERROR] can not set udpRecvBufferSize to %d\n", udpBufferSize);
+        }
+        if (setsockopt(udp_fd, SOL_SOCKET, SO_SNDBUF, (char*)&udpBufferSize, sizeof(udpBufferSize))) {
+            fprintf(stderr, "[ERROR] can not set udpSendBufferSize to %d\n", udpBufferSize);
         }
     }
     /* windows bug: udp socket 10054 */ {
         BOOL bEnalbeConnRestError = FALSE;
         DWORD dwBytesReturned = 0;
         if (WSAIoctl(udp_fd, _WSAIOW(IOC_VENDOR, 12), &bEnalbeConnRestError, sizeof(bEnalbeConnRestError), nullptr, 0, &dwBytesReturned, nullptr, nullptr)) {
-            fprintf(stderr, "WSAIoctl fail\n");
+            fprintf(stderr, "[ERROR] WSAIoctl failed\n");
         }
     }
     /* print addr */ {
@@ -45,12 +49,12 @@ bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port) {
         memset(&sockAddr, 0, sizeof(sockAddr));
         int sockAddrLen = sizeof(sockAddr);
         if (getsockname(udp_fd, (sockaddr*)(&sockAddr), &sockAddrLen)) {
-            fprintf(stderr, "Can not getsockname\n");
+            fprintf(stderr, "[ERROR] can not getsockname\n");
             return false;
         }
         char ipv6Addr[INET6_ADDRSTRLEN] = {'\0'};
         inet_ntop(AF_INET6, &sockAddr.sin6_addr, ipv6Addr, sizeof(ipv6Addr));
-        printf("Create udp socket bind to %s:%u\n", ipv6Addr, ntohs(sockAddr.sin6_port));
+        printf("[INFO] create udp socket bind to [%s]:%u\n", ipv6Addr, ntohs(sockAddr.sin6_port));
     }
     udp_pfd.fd = udp_fd;
     udp_pfd.events = POLLIN;
@@ -88,7 +92,7 @@ static struct pollfd udp_pfd;
 bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port) {
     udp_fd = socket(AF_INET6, SOCK_DGRAM, 0);
     if (udp_fd == -1) {
-        fprintf(stderr, "Error creating UDP socket\n");
+        fprintf(stderr, "[Error] creating UDP socket\n");
         return false;
     }
     struct sockaddr_in6 sa;
@@ -97,7 +101,7 @@ bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port) {
     sa.sin6_addr = in6addr_any;
     sa.sin6_port = htons(sin6_port);
     if (bind(udp_fd, (sockaddr*)(&sa), sizeof(sa)) == -1) {
-        fprintf(stderr, "Error binding UDP socket\n");
+        fprintf(stderr, "[Error] binding UDP socket\n");
         close(udp_fd);
         return false;
     }
@@ -106,16 +110,18 @@ bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port) {
         memset(&sockAddr, 0, sizeof(sockAddr));
         socklen_t sockAddrLen = sizeof(sockAddr);
         if (getsockname(udp_fd, (sockaddr*)(&sockAddr), &sockAddrLen)) {
-            fprintf(stderr, "Can not getsockname\n");
+            fprintf(stderr, "[Error] can not getsockname\n");
             return false;
         }
         char ipv6Addr[INET6_ADDRSTRLEN] = {'\0'};
         inet_ntop(AF_INET6, &sockAddr.sin6_addr, ipv6Addr, sizeof(ipv6Addr));
-        printf("Create udp socket bind to %s:%u\n", ipv6Addr, ntohs(sockAddr.sin6_port));
+        printf("[INFO] create udp socket bind to [%s]:%u\n", ipv6Addr, ntohs(sockAddr.sin6_port));
     }
-    int udpBufferSize = 1024 * 1024;
     if (setsockopt(udp_fd, SOL_SOCKET, SO_RCVBUF, (char*)&udpBufferSize, sizeof(udpBufferSize))) {
-        fprintf(stderr, "Can not set udpBufferSize to %d\n", udpBufferSize);
+        fprintf(stderr, "[Error] can not set udpRecvBufferSize to %d\n", udpBufferSize);
+    }
+    if (setsockopt(udp_fd, SOL_SOCKET, SO_SNDBUF, (char*)&udpBufferSize, sizeof(udpBufferSize))) {
+        fprintf(stderr, "[Error] can not set udpSendBufferSize to %d\n", udpBufferSize);
     }
     udp_pfd.fd = udp_fd;
     udp_pfd.events = POLLIN;
