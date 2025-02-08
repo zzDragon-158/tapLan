@@ -20,15 +20,15 @@ TapLan::TapLan(const char* serverAddr, uint16_t serverPort) {
 
 TapLan::~TapLan() {
     tapLanCloseTapDevice();
-    tapLanCloseUdpIPv6Socket();
+    tapLanCloseUdpSocket();
 }
 
 bool TapLan::openTapDevice(const char* devName) {
     return tapLanOpenTapDevice(devName);
 }
 
-bool TapLan::openUdpSocket(uint16_t sin6_port) {
-    return tapLanOpenUdpIPv6Socket(sin6_port);
+bool TapLan::openUdpSocket(uint16_t port) {
+    return tapLanOpenUdpSocket(port);
 }
 
 void TapLan::readFromTapAndSendToSocket() {
@@ -51,7 +51,7 @@ void TapLan::readFromTapAndSendToSocket() {
                 pDstAddr = &gatewayAddr;
             }
             if (pDstAddr) {
-                ssize_t sendBytes = tapLanSendToUdpIPv6Socket(tapRxBuffer, readBytes, (const sockaddr*)pDstAddr, sizeof(sockaddr_in6));
+                ssize_t sendBytes = tapLanSendToUdpSocket(tapRxBuffer, readBytes, (const sockaddr*)pDstAddr, sizeof(sockaddr_in6));
                 if (sendBytes < readBytes) {
                     fprintf(stderr, "[ERROR] sending to UDP socket, sendBytes %ld\n", sendBytes);
                 }
@@ -67,7 +67,7 @@ void TapLan::recvFromSocketAndForwardToTap() {
     while (run_flag) {
         struct sockaddr_in6 srcAddr;
         socklen_t srcAddrLen = sizeof(srcAddr);
-        ssize_t recvBytes = tapLanRecvFromUdpIPv6Socket(udpRxBuffer, sizeof(udpRxBuffer), (struct sockaddr*)&srcAddr, &srcAddrLen);
+        ssize_t recvBytes = tapLanRecvFromUdpSocket(udpRxBuffer, sizeof(udpRxBuffer), (struct sockaddr*)&srcAddr, &srcAddrLen);
         if (recvBytes >= 0) {
             ssize_t writeBytes = tapLanWriteToTapDevice(udpRxBuffer, recvBytes);
             if (writeBytes < recvBytes) {
@@ -84,7 +84,7 @@ void TapLan::recvFromSocketAndForwardToTap() {
                 memcpy(&macDst, eH->ether_dhost, 6);
                 if (macDst == 0xffffffffffff) {
                     for (auto it = macToIPv6Map.begin(); it != macToIPv6Map.end(); ++it) {
-                        ssize_t sendBytes = tapLanSendToUdpIPv6Socket(udpRxBuffer, recvBytes, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
+                        ssize_t sendBytes = tapLanSendToUdpSocket(udpRxBuffer, recvBytes, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
                         if (sendBytes < recvBytes) {
                             fprintf(stderr, "[ERROR] sending to UDP socket, sendBytes %ld\n", sendBytes);
                         }
@@ -92,7 +92,7 @@ void TapLan::recvFromSocketAndForwardToTap() {
                 } else {
                     auto it = macToIPv6Map.find(macDst);
                     if (it != macToIPv6Map.end()) {
-                        ssize_t sendBytes = tapLanSendToUdpIPv6Socket(udpRxBuffer, recvBytes, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
+                        ssize_t sendBytes = tapLanSendToUdpSocket(udpRxBuffer, recvBytes, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
                         if (sendBytes < recvBytes) {
                             fprintf(stderr, "[ERROR] sending to UDP socket, sendBytes %ld\n", sendBytes);
                         }
@@ -109,8 +109,11 @@ bool TapLan::start() {
     if (!run_flag) return false;
     threadReadFromTapAndSendToSocket = std::thread(std::bind(&TapLan::readFromTapAndSendToSocket, this));
     threadRecvFromSocketAndForwardToTap = std::thread(std::bind(&TapLan::recvFromSocketAndForwardToTap, this));
-    printf("[INFO] TapLan %s is running\n", (isServer? "server": "client"));
-    return true;
+    if (run_flag) {
+        printf("[INFO] TapLan %s is running\n", (isServer? "server": "client"));
+        return true;
+    }
+    return false;
 }
 
 bool TapLan::stop() {

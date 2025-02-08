@@ -15,7 +15,7 @@
 
 #endif
 
-bool tapLanOpenUdpIPv6Socket(uint16_t sin6_port);
-bool tapLanCloseUdpIPv6Socket();
-ssize_t tapLanSendToUdpIPv6Socket(const void* buf, size_t bufLen, const struct sockaddr* dstAddr, socklen_t addrLen);
-ssize_t tapLanRecvFromUdpIPv6Socket(void* buf, size_t bufLen, struct sockaddr* srcAddr, socklen_t* addrLen);
+bool tapLanOpenUdpSocket(uint16_t port);
+bool tapLanCloseUdpSocket();
+ssize_t tapLanSendToUdpSocket(const void* buf, size_t bufLen, const struct sockaddr* dstAddr, socklen_t addrLen);
+ssize_t tapLanRecvFromUdpSocket(void* buf, size_t bufLen, struct sockaddr* srcAddr, socklen_t* addrLen);
