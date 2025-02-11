@@ -1,6 +1,7 @@
 #include "tapLanSocket.hpp"
 
 const int udpBufferSize = 1024 * 1024 * 8;
+sockaddr_in6 gatewayAddr;
 
 #ifdef _WIN32
 static SOCKET udp_fd;

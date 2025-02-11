@@ -15,6 +15,8 @@
 
 #endif
 
+extern sockaddr_in6 gatewayAddr;
+
 bool tapLanOpenUdpSocket(uint16_t port);
 bool tapLanCloseUdpSocket();
 ssize_t tapLanSendToUdpSocket(const void* buf, size_t bufLen, const struct sockaddr* dstAddr, socklen_t addrLen);

@@ -1,2 +1,6 @@
 aux_source_directory(. TapLanSocket)
 add_library(tapLanSocket ${TapLanSocket})
+if(WIN32)
+find_library(WS2_32_LIBRARY ws2_32)
+target_link_libraries(tapLanSocket ${WS2_32_LIBRARY})
+endif()

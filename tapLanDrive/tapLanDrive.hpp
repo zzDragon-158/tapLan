@@ -13,11 +13,11 @@
 #define     TAP_DEVICE_NAME                         "tapLan"
 #define     TAP_CONTROL_CODE(request,method)        CTL_CODE(FILE_DEVICE_UNKNOWN, request, method, FILE_ANY_ACCESS)
 #define     TAP_IOCTL_SET_MEDIA_STATUS              TAP_CONTROL_CODE (6, METHOD_BUFFERED)
+#define     TAP_IOCTL_GET_MAC                       TAP_CONTROL_CODE (1, METHOD_BUFFERED)
 
 #else
 #include <unistd.h>                 // for close
 #include <fcntl.h>                  // for open, O_RDWR
-#include <poll.h>                   // for poll
 #include <cstring>                  // for memset, strncpy
 #include <sys/ioctl.h>              // for ioctl, TUNSETIFF
 #include <net/if.h>                 // for struct ifreq, IFNAMSIZ
@@ -35,5 +35,6 @@ struct ether_header {
 
 bool tapLanOpenTapDevice(const char* devName);
 bool tapLanCloseTapDevice();
+bool tapLanGetMACAddress(uint8_t* buf, size_t bufLen);
 ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen);
 ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen);

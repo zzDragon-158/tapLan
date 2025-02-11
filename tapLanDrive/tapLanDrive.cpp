@@ -7,13 +7,17 @@ struct WinAdapterInfo {
     unsigned long int adapterIdLen;
     unsigned char adapterName[BUFFER_SIZE];
     unsigned long int adapterNameLen;
+    unsigned char adapterMAC[6];
+    unsigned long int adapterMACLen;
     ULONG mediaStatus;
     unsigned long int mediaStatusLen;
     OVERLAPPED overlapRead, overlapWrite;
 
-    WinAdapterInfo(): handle(nullptr), adapterIdLen(BUFFER_SIZE), adapterNameLen(BUFFER_SIZE), mediaStatus(TRUE), mediaStatusLen(sizeof(mediaStatusLen)) {
+    WinAdapterInfo(): handle(nullptr), adapterIdLen(BUFFER_SIZE), adapterNameLen(BUFFER_SIZE), adapterMACLen(6),
+        mediaStatus(TRUE), mediaStatusLen(sizeof(mediaStatusLen)) {
         memset(adapterId, 0, sizeof(adapterId));
         memset(adapterName, 0, sizeof(adapterName));
+        memset(adapterMAC, 0, sizeof(adapterMAC));
         memset(&overlapRead, 0, sizeof(overlapRead));
         memset(&overlapWrite, 0, sizeof(overlapWrite));
         overlapRead.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
@@ -55,6 +59,9 @@ bool tapLanOpenTapDevice(const char* devName) {
                     &tapLanTapDevice.mediaStatus, tapLanTapDevice.mediaStatusLen,
                     &tapLanTapDevice.mediaStatus, tapLanTapDevice.mediaStatusLen, &tapLanTapDevice.mediaStatusLen, nullptr);
                 printf("[INFO] TAP device [%s] opened successfully\n", tapLanTapDevice.adapterName);
+                DeviceIoControl(tapLanTapDevice.handle, TAP_IOCTL_GET_MAC,
+                    tapLanTapDevice.adapterMAC, tapLanTapDevice.adapterMACLen,
+                    tapLanTapDevice.adapterMAC, tapLanTapDevice.adapterMACLen, &tapLanTapDevice.adapterMACLen, nullptr);
                 ret = true;
                 break;
             } else {
@@ -68,6 +75,14 @@ bool tapLanOpenTapDevice(const char* devName) {
 
 bool tapLanCloseTapDevice() {
     CloseHandle(tapLanTapDevice.handle);
+    return true;
+}
+
+bool tapLanGetMACAddress(uint8_t* buf, size_t bufLen) {
+    if (bufLen < 6) {
+        return false;
+    }
+    memcpy(buf, &tapLanTapDevice.adapterMAC, 6);
     return true;
 }
 
@@ -109,7 +124,7 @@ ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen) {
 
 #else
 static int tap_fd;
-static struct pollfd tap_pfd;
+uint8_t macAddress[6];
 
 bool tapLanOpenTapDevice(const char* devName) {
     tap_fd = open("/dev/net/tun", O_RDWR);
@@ -129,13 +144,25 @@ bool tapLanOpenTapDevice(const char* devName) {
         return false;
     }
     printf("[INFO] TAP device [%s] opened successfully\n", ifr.ifr_name);
-    tap_pfd.fd = tap_fd;
-    tap_pfd.events = POLLIN;
+    if (ioctl(tap_fd, SIOCGIFHWADDR, &ifr) == -1) {
+        fprintf(stderr, "ioctl(SIOCGIFHWADDR)\n");
+        close(tap_fd);
+        return false;
+    }
+    memcpy(macAddress, ifr.ifr_hwaddr.sa_data, 6);
     return true;
 }
 
 bool tapLanCloseTapDevice() {
     close(tap_fd);
+    return true;
+}
+
+bool tapLanGetMACAddress(uint8_t* buf, size_t bufLen) {
+    if (bufLen < 6) {
+        return false;
+    }
+    memcpy(buf, macAddress, 6);
     return true;
 }
 
