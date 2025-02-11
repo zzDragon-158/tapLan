@@ -1,2 +1,6 @@
 aux_source_directory(. TapLanDHCP)
 add_library(tapLanDHCP ${TapLanDHCP})
+if(WIN32)
+find_library(WS2_32_LIBRARY ws2_32)
+target_link_libraries(tapLanDHCP ${WS2_32_LIBRARY})
+endif()
