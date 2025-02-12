@@ -127,6 +127,12 @@ static int tap_fd;
 uint8_t macAddress[6];
 
 bool tapLanOpenTapDevice(const char* devName) {
+    if (system("ip link set dev tapLan up")) {
+        if (system("ip tuntap add dev tapLan mode tap"))
+            return false;
+        if (system("ip link set dev tapLan up"))
+            return false;
+    }
     tap_fd = open("/dev/net/tun", O_RDWR);
     if (tap_fd == -1) {
         fprintf(stderr, "Error can not open /dev/net/tun\n");
@@ -140,13 +146,11 @@ bool tapLanOpenTapDevice(const char* devName) {
     }
     if (ioctl(tap_fd, TUNSETIFF, (void*)&ifr) == -1) {
         fprintf(stderr, "ioctl(TUNSETIFF)\n");
-        close(tap_fd);
         return false;
     }
     printf("[INFO] TAP device [%s] opened successfully\n", ifr.ifr_name);
     if (ioctl(tap_fd, SIOCGIFHWADDR, &ifr) == -1) {
         fprintf(stderr, "ioctl(SIOCGIFHWADDR)\n");
-        close(tap_fd);
         return false;
     }
     memcpy(macAddress, ifr.ifr_hwaddr.sa_data, 6);
