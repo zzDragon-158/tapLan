@@ -13,16 +13,12 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Please run this program as an administrator or root\n");
         return -1;
     }
-    bool isServer = false;
-    uint32_t netID = 0;
-    int netIDLen = 0;
+    bool isServer = true;
+    uint32_t netID = 3232298496;
+    int netIDLen = 24;
     char serverAddr[INET6_ADDRSTRLEN] = "::ffff:";
     size_t serverAddrOffset = strlen(serverAddr);
     uint16_t port = 0;
-    if (argc < 2) {
-        fprintf(stderr, "less argc\n");
-        return 1;
-    }
     int opt;
     while ((opt = getopt(argc, argv, "s:c:p:h")) != -1) {
         switch (opt) {
