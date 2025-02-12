@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
     int netIDLen = 24;
     char serverAddr[INET6_ADDRSTRLEN] = "::ffff:";
     size_t serverAddrOffset = strlen(serverAddr);
-    uint16_t port = 0;
+    uint16_t port = 3460;
     int opt;
     while ((opt = getopt(argc, argv, "s:c:p:h")) != -1) {
         switch (opt) {
