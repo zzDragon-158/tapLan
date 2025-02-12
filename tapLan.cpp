@@ -140,7 +140,7 @@ bool TapLan::start() {
             system(cmd.str().c_str());
             printf("[INFO] your tapLan ip addr has been set to %s/%d\n", inet_ntoa(ipAddr), netIDLen);
         } else {
-            uint8_t mac[6];
+            uint8_t* mac = new uint8_t [6];
             tapLanGetMACAddress(mac, 6);
             threadKeepConnectedWithServer = std::thread(tapLanSendDHCPDiscover, mac);
         }

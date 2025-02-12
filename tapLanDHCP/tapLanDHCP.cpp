@@ -6,7 +6,7 @@ uint16_t xid = 0;
 uint32_t last_ipaddr = 0;
 std::unordered_map<uint64_t, uint32_t> macToHostIDMap;
 
-bool tapLanSendDHCPDiscover(uint8_t macAddress[6]) {
+bool tapLanSendDHCPDiscover(uint8_t* macAddress) {
     struct TapLanDHCPMessage msg;
     srand((unsigned int)time(0));
     xid = rand() % 65532 + 2;
@@ -22,6 +22,7 @@ bool tapLanSendDHCPDiscover(uint8_t macAddress[6]) {
         std::this_thread::sleep_for(std::chrono::seconds(5));
         if (last_ipaddr == 0) fprintf(stderr, "[ERROR] not found server\n");
     }
+    delete [] macAddress;
     return true;
 }
 
