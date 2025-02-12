@@ -47,6 +47,7 @@ int main(int argc, char* argv[]) {
                     return -1;
                 }
                 netID = ntohl(sa.sin_addr.s_addr);
+                netID = (netID >> (32 - netIDLen)) << (32 - netIDLen);
                 break;
             } case 'c': {
                 isServer = false;
