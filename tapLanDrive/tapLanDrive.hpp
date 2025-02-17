@@ -1,20 +1,17 @@
 #pragma once
 #include <iostream>
 #include <cstdint>
-
 #ifdef _WIN32
 #include <sstream>
 #include <windows.h>
-
 #define     NETWORK_CONNECTIONS_KEY                 "SYSTEM\\CurrentControlSet\\Control\\Network\\{4D36E972-E325-11CE-BFC1-08002BE10318}"
 #define     USERMODEDEVICEDIR                       "\\\\.\\Global\\"
 #define     TAPSUFFIX                               ".tap"
 #define     BUFFER_SIZE                             1024
-#define     TAP_DEVICE_NAME                         "tapLan"
 #define     TAP_CONTROL_CODE(request,method)        CTL_CODE(FILE_DEVICE_UNKNOWN, request, method, FILE_ANY_ACCESS)
 #define     TAP_IOCTL_SET_MEDIA_STATUS              TAP_CONTROL_CODE (6, METHOD_BUFFERED)
 #define     TAP_IOCTL_GET_MAC                       TAP_CONTROL_CODE (1, METHOD_BUFFERED)
-
+#define TapLanDriveLogError(fmt, ...)        fprintf(stderr, "[TapLanDrive] [ERROR] " fmt " GetLastError %d\n", ##__VA_ARGS__, GetLastError())
 #else
 #include <unistd.h>                 // for close
 #include <fcntl.h>                  // for open, O_RDWR
@@ -22,18 +19,19 @@
 #include <sys/ioctl.h>              // for ioctl, TUNSETIFF
 #include <net/if.h>                 // for struct ifreq, IFNAMSIZ
 #include <linux/if_tun.h>           // for IFF_TAP, IFF_NO_PI;
-
+#define TapLanDriveLogError(fmt, ...)        fprintf(stderr, "[TapLanDrive] [ERROR] " fmt "\n", ##__VA_ARGS__)
 #endif
-
+#define TapLanDriveLogInfo(fmt, ...)         fprintf(stdout, "[TapLanDrive] [INFO] " fmt "\n", ##__VA_ARGS__)
 #define ETHERNET_HEADER_LEN 14
 #define ETHERTYPE_ARP 0x0806
+
 struct ether_header {
     uint8_t ether_dhost[6];
     uint8_t ether_shost[6];
     uint16_t ether_type;
 };
 
-bool tapLanOpenTapDevice(const char* devName);
+bool tapLanOpenTapDevice();
 bool tapLanCloseTapDevice();
 bool tapLanGetMACAddress(uint8_t* buf, size_t bufLen);
 ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen);

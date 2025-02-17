@@ -5,13 +5,15 @@
 #include "./tapLanSocket/tapLanSocket.hpp"
 #include "./tapLanDrive/tapLanDrive.hpp"
 #include "./tapLanDHCP/tapLanDHCP.hpp"
+#define TapLanLogInfo(fmt, ...)         fprintf(stdout, "[TapLan] [INFO] " fmt "\n", ##__VA_ARGS__)
+#define TapLanLogError(fmt, ...)        fprintf(stderr, "[TapLan] [ERROR] " fmt "\n", ##__VA_ARGS__)
 
 class TapLan {
 public:
     TapLan(uint16_t serverPort, uint32_t netID, int netIDLen);      // server
     TapLan(const char* serverAddr, const uint16_t serverPort);      // client
     ~TapLan();
-    bool openTapDevice(const char* devName);
+    bool openTapDevice();
     bool openUdpSocket(uint16_t port);
     void recvFromSocketAndForwardToTap();
     void readFromTapAndSendToSocket();

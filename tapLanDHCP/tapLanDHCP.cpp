@@ -2,14 +2,14 @@
 
 bool run_flag = true;
 uint32_t ipAddrStart = 2;
-uint16_t xid = 0;
+int32_t xid = 0;
 uint32_t last_ipaddr = 0;
 std::unordered_map<uint64_t, uint32_t> macToHostIDMap;
 
 bool tapLanSendDHCPDiscover(uint8_t* macAddress) {
     struct TapLanDHCPMessage msg;
     srand((unsigned int)time(0));
-    xid = rand() % 65532 + 2;
+    xid = rand();
     while (run_flag) {
         memset(&msg, 0, sizeof(msg));
         msg.xid = xid;
@@ -17,10 +17,12 @@ bool tapLanSendDHCPDiscover(uint8_t* macAddress) {
         memcpy(msg.mac, macAddress, 6);
         ssize_t sendBytes = tapLanSendToUdpSocket(&msg, sizeof(msg), (sockaddr*)&gatewayAddr, sizeof(gatewayAddr));
         if (sendBytes != sizeof(msg)) {
-            fprintf(stderr, "[ERROR] sendDHCPDiscover\n");
+            TapLanDHCPLogError("Sending TapLanDHCP discover failed.");
         }
         std::this_thread::sleep_for(std::chrono::seconds(5));
-        if (last_ipaddr == 0) fprintf(stderr, "[ERROR] not found server\n");
+        if (last_ipaddr == 0) {
+            TapLanDHCPLogError("No TapLanDHCP server found.");
+        }
     }
     delete [] macAddress;
     return true;
@@ -44,7 +46,7 @@ bool tapLanHandleDHCPDiscover(uint32_t netID, int netIDLen, struct TapLanDHCPMes
     } else {
         ipAddr += ipAddrStart;
         macToHostIDMap[mac] = ipAddrStart;
-        printf("[INFO] mac[%llX] hostID: %u\n", mac, ipAddrStart);
+        TapLanDHCPLogInfo("New device connected, macAddress[%llX] hostID: %u", mac, ipAddrStart);
         ++ipAddrStart;
     }
     msg.op = 2;
@@ -52,6 +54,7 @@ bool tapLanHandleDHCPDiscover(uint32_t netID, int netIDLen, struct TapLanDHCPMes
     msg.netIDLen = netIDLen;
     ssize_t sendBytes = tapLanSendToUdpSocket(&msg, sizeof(msg), dstAddr, addrLen);
     if (sendBytes != sizeof(msg)) {
+        TapLanDHCPLogError("Sending TapLanDHCP offer failed.");
         return false;
     }
     mac = 0;
@@ -73,8 +76,11 @@ bool tapLanHandleDHCPOffer(struct TapLanDHCPMessage& msg) {
         cmd << "ip addr flush dev tapLan\n";
         cmd << "ip addr add " << inet_ntoa(ipAddr) << "/" << +msg.netIDLen << " dev tapLan";
 #endif
-        system(cmd.str().c_str());
-        printf("[INFO] your tapLan ip addr has been set to %s/%d\n", inet_ntoa(ipAddr), msg.netIDLen);
+        if (system(cmd.str().c_str())) {
+            TapLanDHCPLogError("Setting tapLan IP address to %s/%d failed.", inet_ntoa(ipAddr), msg.netIDLen);
+        } else {
+            TapLanDHCPLogInfo("tapLan IP address has been set to %s/%d.", inet_ntoa(ipAddr), msg.netIDLen);
+        }
     } else {
         return false;
     }

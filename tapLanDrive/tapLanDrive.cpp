@@ -1,5 +1,4 @@
 #include "tapLanDrive.hpp"
-
 #ifdef _WIN32
 struct WinAdapterInfo {
     HANDLE handle;
@@ -27,41 +26,51 @@ struct WinAdapterInfo {
 
 static struct WinAdapterInfo tapLanTapDevice;
 
-bool tapLanOpenTapDevice(const char* devName) {
+bool tapLanOpenTapDevice() {
     bool ret = false;
     HKEY openkey0;
     // 获取网络适配器列表
-    if (LONG rc = RegOpenKeyExA(HKEY_LOCAL_MACHINE, NETWORK_CONNECTIONS_KEY, 0, KEY_READ, &openkey0)) {
-        fprintf(stderr, "[ERROR] unable to read registry, RegOpenKeyExA %d\n", rc);
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, NETWORK_CONNECTIONS_KEY, 0, KEY_READ, &openkey0)) {
+        TapLanDriveLogError("Openning registry failed.");
         return false;
     }
     // 遍历注册表目录 NETWORK_CONNECTIONS_KEY 下的所有网络适配器
     for (int i = 0; ; ++i) {
         struct WinAdapterInfo adapter;
         // 获取 adapterId
-        if (RegEnumKeyExA(openkey0, i, adapter.adapterId, &adapter.adapterIdLen, nullptr, nullptr, nullptr, nullptr)) break;
+        if (RegEnumKeyExA(openkey0, i, adapter.adapterId, &adapter.adapterIdLen, nullptr, nullptr, nullptr, nullptr))
+            break;
         // 获取 adapterName
         std::ostringstream regpath;
         regpath << NETWORK_CONNECTIONS_KEY << "\\" << adapter.adapterId << "\\Connection";
         HKEY openkey1;
-        if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, regpath.str().c_str(), 0, KEY_READ, &openkey1)) continue;
+        if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, regpath.str().c_str(), 0, KEY_READ, &openkey1))
+            continue;
         int err = RegQueryValueExA(openkey1, "Name", nullptr, nullptr, adapter.adapterName, &adapter.adapterNameLen);
         RegCloseKey(openkey1);
-        if (err) continue;
+        if (err)
+            continue;
         // 获取 handle
         std::ostringstream tapName;
         tapName << USERMODEDEVICEDIR << adapter.adapterId << TAPSUFFIX;
         adapter.handle = CreateFileA(tapName.str().c_str(), GENERIC_WRITE | GENERIC_READ, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, 0);
         if (adapter.handle != INVALID_HANDLE_VALUE) {
-            if (0 == strcmp(TAP_DEVICE_NAME, (const char*)adapter.adapterName)) {
+            if (0 == strcmp("tapLan", (const char*)adapter.adapterName)) {
                 memcpy(&tapLanTapDevice, &adapter, sizeof(struct WinAdapterInfo));
-                DeviceIoControl(tapLanTapDevice.handle, TAP_IOCTL_SET_MEDIA_STATUS,
+                if (!DeviceIoControl(tapLanTapDevice.handle, TAP_IOCTL_SET_MEDIA_STATUS,
                     &tapLanTapDevice.mediaStatus, tapLanTapDevice.mediaStatusLen,
-                    &tapLanTapDevice.mediaStatus, tapLanTapDevice.mediaStatusLen, &tapLanTapDevice.mediaStatusLen, nullptr);
-                printf("[INFO] TAP device [%s] opened successfully\n", tapLanTapDevice.adapterName);
-                DeviceIoControl(tapLanTapDevice.handle, TAP_IOCTL_GET_MAC,
+                    &tapLanTapDevice.mediaStatus, tapLanTapDevice.mediaStatusLen, &tapLanTapDevice.mediaStatusLen, nullptr)) {
+                    TapLanDriveLogError("DeviceIoControl(TAP_IOCTL_SET_MEDIA_STATUS) failed.");
+                    ret = false;
+                    break;
+                }
+                if (!DeviceIoControl(tapLanTapDevice.handle, TAP_IOCTL_GET_MAC,
                     tapLanTapDevice.adapterMAC, tapLanTapDevice.adapterMACLen,
-                    tapLanTapDevice.adapterMAC, tapLanTapDevice.adapterMACLen, &tapLanTapDevice.adapterMACLen, nullptr);
+                    tapLanTapDevice.adapterMAC, tapLanTapDevice.adapterMACLen, &tapLanTapDevice.adapterMACLen, nullptr)) {
+                    TapLanDriveLogError("DeviceIoControl(TAP_IOCTL_GET_MAC) failed.");
+                    ret = false;
+                    break;
+                }
                 ret = true;
                 break;
             } else {
@@ -96,9 +105,11 @@ ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen) {
         if (lastError == ERROR_IO_PENDING) {
             GetOverlappedResult(tapLanTapDevice.handle, &tapLanTapDevice.overlapWrite, &writeBytes, TRUE);
             ResetEvent(tapLanTapDevice.overlapWrite.hEvent);
+            if (writeBytes < bufLen)
+                TapLanDriveLogError("writeBytes[%lld] is less than expected[%lu].", writeBytes, bufLen);
             return writeBytes;
         } else {
-            fprintf(stderr, "[ERROR] writting to tap device, GetLastError %u\n", lastError);
+            TapLanDriveLogError("Writting to tap device failed.");
             return -1;
         }
     }
@@ -116,7 +127,7 @@ ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen) {
             ResetEvent(tapLanTapDevice.overlapRead.hEvent);
             return readBytes;
         } else {
-            fprintf(stderr, "[ERROR] reading from tap device, GetLastError %u\n", lastError);
+            TapLanDriveLogError("Reading from tap device failed.");
             return -1;
         }
     }
@@ -126,7 +137,7 @@ ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen) {
 static int tap_fd;
 uint8_t macAddress[6];
 
-bool tapLanOpenTapDevice(const char* devName) {
+bool tapLanOpenTapDevice() {
     if (system("ip link set dev tapLan up")) {
         if (system("ip tuntap add dev tapLan mode tap"))
             return false;
@@ -135,22 +146,19 @@ bool tapLanOpenTapDevice(const char* devName) {
     }
     tap_fd = open("/dev/net/tun", O_RDWR);
     if (tap_fd == -1) {
-        fprintf(stderr, "Error can not open /dev/net/tun\n");
+        TapLanDriveLogError("Can not open [/dev/net/tun].");
         return false;
     }
     struct ifreq ifr;
     memset(&ifr, 0, sizeof(ifr));
     ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-    if (devName) {
-        strncpy(ifr.ifr_name, devName, IFNAMSIZ);
-    }
+    strncpy(ifr.ifr_name, "tapLan", IFNAMSIZ);
     if (ioctl(tap_fd, TUNSETIFF, (void*)&ifr) == -1) {
-        fprintf(stderr, "ioctl(TUNSETIFF)\n");
+        TapLanDriveLogError("ioctl(TUNSETIFF) failed.");
         return false;
     }
-    printf("[INFO] TAP device [%s] opened successfully\n", ifr.ifr_name);
     if (ioctl(tap_fd, SIOCGIFHWADDR, &ifr) == -1) {
-        fprintf(stderr, "ioctl(SIOCGIFHWADDR)\n");
+        TapLanDriveLogError("ioctl(SIOCGIFHWADDR) failed.");
         return false;
     }
     memcpy(macAddress, ifr.ifr_hwaddr.sa_data, 6);
@@ -171,11 +179,17 @@ bool tapLanGetMACAddress(uint8_t* buf, size_t bufLen) {
 }
 
 ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen) {
-    return write(tap_fd, buf, bufLen);
+    ssize_t writeBytes = write(tap_fd, buf, bufLen);
+    if (writeBytes < bufLen)
+        TapLanDriveLogError("writeBytes[%lld] is less than expected[%lu].", writeBytes, bufLen);
+    return writeBytes;
 }
 
 ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen) {
-    return read(tap_fd, buf, bufLen);
+    ssize_t readBytes = read(tap_fd, buf, bufLen);
+    if (readBytes == -1)
+        TapLanDriveLogError("Reading from tap device failed.");
+    return readBytes;
 }
 
 #endif
