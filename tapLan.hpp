@@ -25,6 +25,7 @@ private:
     bool isServer;
     uint32_t netID;
     int netIDLen;
+    uint64_t myMAC;
     std::thread threadRecvFromSocketAndForwardToTap, threadReadFromTapAndSendToSocket;
     std::thread threadKeepConnectedWithServer;
     std::unordered_map<uint64_t, struct sockaddr_in6> macToIPv6Map;

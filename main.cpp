@@ -79,7 +79,8 @@ int main(int argc, char* argv[]) {
         printf("server [%s]:%u\n", serverAddr, port);
         pTapLan = new TapLan(serverAddr, port);
     }
-    pTapLan->start();
+    if (!pTapLan->start())
+        return -1;
     std::string input;
     while (true) {
         std::cout << "enter \"quit\" to exit" << std::endl;

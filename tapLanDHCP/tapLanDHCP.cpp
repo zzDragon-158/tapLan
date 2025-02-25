@@ -24,7 +24,6 @@ bool tapLanSendDHCPDiscover(uint8_t* macAddress) {
             TapLanDHCPLogError("No TapLanDHCP server found.");
         }
     }
-    delete [] macAddress;
     return true;
 }
 

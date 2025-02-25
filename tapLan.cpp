@@ -7,11 +7,19 @@ TapLan::TapLan(uint16_t serverPort, uint32_t netID, int netIDLen) {   // server
     this->netID = netID;
     this->netIDLen = netIDLen;
     run_flag = openTapDevice() && openUdpSocket(serverPort);
+    if (run_flag) {
+        myMAC = 0;
+        tapLanGetMACAddress((uint8_t*)&myMAC, sizeof(myMAC));
+    }
 }
 
 TapLan::TapLan(const char* serverAddr, uint16_t serverPort) {
     isServer = false;
     run_flag = openTapDevice() && openUdpSocket(0);
+    if (run_flag) {
+        myMAC = 0;
+        tapLanGetMACAddress((uint8_t*)&myMAC, sizeof(myMAC));
+    }
     memset(&gatewayAddr, 0, sizeof(gatewayAddr));
     gatewayAddr.sin6_family = AF_INET6;
     inet_pton(AF_INET6, serverAddr, &gatewayAddr.sin6_addr);
@@ -40,11 +48,14 @@ void TapLan::readFromTapAndSendToSocket() {
         if (readBytes > ETHERNET_HEADER_LEN) {
             if (isServer) {
                 struct ether_header* eH = (struct ether_header *)tapRxBuffer;
+                uint64_t macSrc = 0;
+                memcpy(&macSrc, eH->ether_shost, 6);
                 uint64_t macDst = 0;
                 memcpy(&macDst, eH->ether_dhost, 6);
-                if (macDst == 0xffffffffffff) {
+                if (macDst & 0x01) {
                     for (auto it = macToIPv6Map.begin(); it != macToIPv6Map.end(); ++it) {
-                        ssize_t sendBytes = tapLanSendToUdpSocket(tapRxBuffer, readBytes, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
+                        if (it->first != macSrc)
+                            ssize_t sendBytes = tapLanSendToUdpSocket(tapRxBuffer, readBytes, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
                     }
                 } else {
                     auto it = macToIPv6Map.find(macDst);
@@ -80,14 +91,18 @@ void TapLan::recvFromSocketAndForwardToTap() {
                 tapLanHandleDHCPOffer(msg);
             }
         } else if (recvBytes > ETHERNET_HEADER_LEN) {
-            ssize_t writeBytes = tapLanWriteToTapDevice(udpRxBuffer, recvBytes);
+            struct ether_header* eH = (struct ether_header *)udpRxBuffer;
+            uint64_t macSrc = 0;
+            memcpy(&macSrc, eH->ether_shost, 6);
+            uint64_t macDst = 0;
+            memcpy(&macDst, eH->ether_dhost, 6);
+            if (macDst == myMAC || (macDst & 0x01))
+                ssize_t writeBytes = tapLanWriteToTapDevice(udpRxBuffer, recvBytes);
             if (isServer) {
-                struct ether_header* eH = (struct ether_header *)udpRxBuffer;
-                uint64_t macDst = 0;
-                memcpy(&macDst, eH->ether_dhost, 6);
-                if (macDst == 0xffffffffffff) {
+                if (macDst & 0x01) {
                     for (auto it = macToIPv6Map.begin(); it != macToIPv6Map.end(); ++it) {
-                        ssize_t sendBytes = tapLanSendToUdpSocket(udpRxBuffer, recvBytes, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
+                        if (it->first != macSrc)
+                            ssize_t sendBytes = tapLanSendToUdpSocket(udpRxBuffer, recvBytes, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
                     }
                 } else {
                     auto it = macToIPv6Map.find(macDst);
@@ -124,9 +139,7 @@ bool TapLan::start() {
                 TapLanLogInfo("tapLan IP address has been set to %s/%d.", inet_ntoa(ipAddr), netIDLen);
             }
         } else {
-            uint8_t* mac = new uint8_t [6];
-            tapLanGetMACAddress(mac, 6);
-            threadKeepConnectedWithServer = std::thread(tapLanSendDHCPDiscover, mac);
+            threadKeepConnectedWithServer = std::thread(tapLanSendDHCPDiscover, (uint8_t*)&myMAC);
         }
         return true;
     }
