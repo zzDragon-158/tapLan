@@ -71,14 +71,14 @@ bool tapLanCloseUdpSocket() {
     return true;
 }
 
-ssize_t tapLanSendToUdpSocket(const void* buf, size_t bufLen, const struct sockaddr* dstAddr, socklen_t addrLen) {
+ssize_t tapLanSendToUdpSocket(const void* buf, size_t bufLen, const sockaddr* dstAddr, socklen_t addrLen) {
     ssize_t sendBytes = sendto(udp_fd, (const char*)buf, bufLen, 0, dstAddr, addrLen);
     if (sendBytes < bufLen)
         TapLanSocketLogError("sendBytes[%lld] is less than expected[%lld].", sendBytes, bufLen);
     return sendBytes;
 }
 
-ssize_t tapLanRecvFromUdpSocket(void* buf, size_t bufLen, struct sockaddr* srcAddr, socklen_t* addrLen) {
+ssize_t tapLanRecvFromUdpSocket(void* buf, size_t bufLen, sockaddr* srcAddr, socklen_t* addrLen) {
     ssize_t recvBytes = recvfrom(udp_fd, (char*)buf, bufLen, 0, srcAddr, addrLen);
     if (recvBytes == -1)
         TapLanSocketLogError("Receiving from UDP socket failed.");

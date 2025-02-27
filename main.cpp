@@ -2,8 +2,6 @@
 #include <iostream>
 #include <cstring>
 #include <cstdlib>
-#include <regex>
-#include <sstream>
 #include <getopt.h>
 
 bool isRunningAsAdmin();
@@ -19,8 +17,9 @@ int main(int argc, char* argv[]) {
     char serverAddr[INET6_ADDRSTRLEN] = "::ffff:";
     size_t serverAddrOffset = strlen(serverAddr);
     uint16_t port = 3460;
+    const char* key = "";
     int opt;
-    while ((opt = getopt(argc, argv, "s:c:p:h")) != -1) {
+    while ((opt = getopt(argc, argv, "s:c:p:k:h")) != -1) {
         switch (opt) {
             case 's': {
                 isServer = true;
@@ -65,6 +64,9 @@ int main(int argc, char* argv[]) {
                     return 1;
                 }
                 break;
+            } case 'k': {
+                key = optarg;
+                break;
             } case 'h': {
                 printf("Usage as server: %s [-s <CIDR>] [-p <server port>]\n", argv[0]);
                 printf("Usage as client: %s [-c <server address>] [-p <server port>]\n", argv[0]);
@@ -74,10 +76,10 @@ int main(int argc, char* argv[]) {
     }
     TapLan* pTapLan;
     if (isServer) {
-        pTapLan = new TapLan(port, netID, netIDLen);
+        pTapLan = new TapLan(port, netID, netIDLen, key);
     } else {
         printf("server [%s]:%u\n", serverAddr, port);
-        pTapLan = new TapLan(serverAddr, port);
+        pTapLan = new TapLan(serverAddr, port, key);
     }
     if (!pTapLan->start())
         return -1;
@@ -87,7 +89,7 @@ int main(int argc, char* argv[]) {
         std::getline(std::cin, input);
         if (input == "quit") {
             std::cout << "Waiting for thread termination......" << std::endl;
-            delete [] pTapLan;
+            pTapLan->stop();
             break;
         }
     }

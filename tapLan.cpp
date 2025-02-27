@@ -1,118 +1,133 @@
-#include <functional>
-#include <cstring>
 #include "tapLan.hpp"
 
-TapLan::TapLan(uint16_t serverPort, uint32_t netID, int netIDLen) {   // server
+TapLan::TapLan(uint16_t serverPort, uint32_t netID, int netIDLen, const char* key) {   // server
     isServer = true;
     this->netID = netID;
     this->netIDLen = netIDLen;
-    run_flag = openTapDevice() && openUdpSocket(serverPort);
+    if (isSecurity = strcmp("", key))
+        this->key = TapLanKey(key);
+    run_flag = tapLanOpenTapDevice() && tapLanOpenUdpSocket(serverPort);
     if (run_flag) {
-        myMAC = 0;
-        tapLanGetMACAddress((uint8_t*)&myMAC, sizeof(myMAC));
+        myIP = netID + 1;
+        tapLanGetMACAddress(myMAC.address, sizeof(myMAC.address));
     }
 }
 
-TapLan::TapLan(const char* serverAddr, uint16_t serverPort) {
+TapLan::TapLan(const char* serverAddr, uint16_t serverPort, const char* key) {
     isServer = false;
-    run_flag = openTapDevice() && openUdpSocket(0);
-    if (run_flag) {
-        myMAC = 0;
-        tapLanGetMACAddress((uint8_t*)&myMAC, sizeof(myMAC));
-    }
     memset(&gatewayAddr, 0, sizeof(gatewayAddr));
     gatewayAddr.sin6_family = AF_INET6;
     inet_pton(AF_INET6, serverAddr, &gatewayAddr.sin6_addr);
     gatewayAddr.sin6_port = htons(serverPort);
+    if (isSecurity = strcmp("", key))
+        this->key = TapLanKey(key);
+    run_flag = tapLanOpenTapDevice() && tapLanOpenUdpSocket(0);
+    if (run_flag) {
+        myIP = 0;
+        tapLanGetMACAddress(myMAC.address, sizeof(myMAC.address));
+    }
 }
 
 TapLan::~TapLan() {
-    tapLanCloseTapDevice();
-    tapLanCloseUdpSocket();
-    tapLanClearRunFlag();
     stop();
 }
 
-bool TapLan::openTapDevice() {
-    return tapLanOpenTapDevice();
-}
-
-bool TapLan::openUdpSocket(uint16_t port) {
-    return tapLanOpenUdpSocket(port);
-}
-
 void TapLan::readFromTapAndSendToSocket() {
-    uint8_t tapRxBuffer[65535];
+    uint8_t tapRxBuffer[65536];
     while (run_flag) {
         ssize_t readBytes = tapLanReadFromTapDevice(tapRxBuffer, sizeof(tapRxBuffer));
+        if (readBytes == -1)
+            continue;
         if (readBytes > ETHERNET_HEADER_LEN) {
+            ether_header eh;
+            memcpy(&eh, tapRxBuffer, sizeof(ether_header));
+            if (isSecurity && !tapLanEncryptDataWithAes(tapRxBuffer, (size_t&)readBytes, key))
+                continue;
+            /* tapRxBuffer may be encrypted, so it is best not to do anything other than forwarding data */
             if (isServer) {
-                struct ether_header* eH = (struct ether_header *)tapRxBuffer;
-                uint64_t macSrc = 0;
-                memcpy(&macSrc, eH->ether_shost, 6);
-                uint64_t macDst = 0;
-                memcpy(&macDst, eH->ether_dhost, 6);
-                if (macDst & 0x01) {
+                bool isBroadcast = eh.ether_dhost[0] & 0x01;
+                if (isBroadcast) {
                     for (auto it = macToIPv6Map.begin(); it != macToIPv6Map.end(); ++it) {
-                        if (it->first != macSrc)
-                            ssize_t sendBytes = tapLanSendToUdpSocket(tapRxBuffer, readBytes, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
+                        if (memcmp(&it->first.address, &eh.ether_shost, 6) != 0)
+                            tapLanSendToUdpSocket(tapRxBuffer, readBytes, (sockaddr*)&(it->second), sizeof(sockaddr_in6));
                     }
                 } else {
-                    auto it = macToIPv6Map.find(macDst);
+                    auto it = macToIPv6Map.find(eh.ether_dhost);
                     if (it != macToIPv6Map.end()) {
-                        ssize_t sendBytes = tapLanSendToUdpSocket(tapRxBuffer, readBytes, (const sockaddr*)&it->second, sizeof(sockaddr_in6));
+                        tapLanSendToUdpSocket(tapRxBuffer, readBytes, (const sockaddr*)&it->second, sizeof(sockaddr_in6));
                     }
                 }
             } else {
-                ssize_t sendBytes = tapLanSendToUdpSocket(tapRxBuffer, readBytes, (const sockaddr*)&gatewayAddr, sizeof(sockaddr_in6));
+                tapLanSendToUdpSocket(tapRxBuffer, readBytes, (const sockaddr*)&gatewayAddr, sizeof(sockaddr_in6));
             }
-        } else {
-            // read failed
         }
     }
 }
 
 void TapLan::recvFromSocketAndForwardToTap() {
-    uint8_t udpRxBuffer[65535];
+    uint8_t udpRxBuffer[65536];
     while (run_flag) {
-        struct sockaddr_in6 srcAddr;
+        sockaddr_in6 srcAddr;
         socklen_t srcAddrLen = sizeof(srcAddr);
-        ssize_t recvBytes = tapLanRecvFromUdpSocket(udpRxBuffer, sizeof(udpRxBuffer), (struct sockaddr*)&srcAddr, &srcAddrLen);
+        ssize_t recvBytes = tapLanRecvFromUdpSocket(udpRxBuffer, sizeof(udpRxBuffer), (sockaddr*)&srcAddr, &srcAddrLen);
+        if (recvBytes == -1)
+            continue;
+        if (isSecurity && !tapLanDecryptDataWithAes(udpRxBuffer, (size_t&)recvBytes, key))
+            continue;
         if (recvBytes == sizeof(TapLanDHCPMessage)) {
-            TapLanDHCPMessage msg;
-            memcpy(&msg, udpRxBuffer, sizeof(msg));
+            TapLanDHCPMessage& msg = (TapLanDHCPMessage&)udpRxBuffer;
+            size_t msgLen = sizeof(TapLanDHCPMessage);
             if (isServer) {
-                if (tapLanHandleDHCPDiscover(netID, netIDLen, msg, (struct sockaddr*)&srcAddr, srcAddrLen)) {
-                    uint64_t macSrc = 0;
-                    memcpy(&macSrc, msg.mac, 6);
-                    macToIPv6Map[macSrc] = srcAddr;
+                if (tapLanHandleDHCPDiscover(netID, netIDLen, msg)) {
+                    macToIPv6Map[msg.mac] = srcAddr;
+                    if (isSecurity && !tapLanEncryptDataWithAes((uint8_t*)&msg, msgLen, key))
+                        continue;
+                    tapLanSendToUdpSocket(&msg, msgLen, (sockaddr*)&srcAddr, srcAddrLen);
                 }
             } else {
-                tapLanHandleDHCPOffer(msg);
+                if (tapLanHandleDHCPOffer(msg))
+                    myIP = msg.addr;
             }
         } else if (recvBytes > ETHERNET_HEADER_LEN) {
-            struct ether_header* eH = (struct ether_header *)udpRxBuffer;
-            uint64_t macSrc = 0;
-            memcpy(&macSrc, eH->ether_shost, 6);
-            uint64_t macDst = 0;
-            memcpy(&macDst, eH->ether_dhost, 6);
-            if (macDst == myMAC || (macDst & 0x01))
-                ssize_t writeBytes = tapLanWriteToTapDevice(udpRxBuffer, recvBytes);
+            ether_header eh;
+            memcpy(&eh, udpRxBuffer, sizeof(ether_header));
+            bool isSendToMe = !memcmp(&myMAC.address, &eh.ether_dhost, 6);
+            bool isBroadcast = (eh.ether_dhost[0] & 0x01);
+            if (isSendToMe || isBroadcast) {
+                tapLanWriteToTapDevice(udpRxBuffer, recvBytes);
+            }
+            if (isSecurity && !tapLanEncryptDataWithAes(udpRxBuffer, (size_t&)recvBytes, key))
+                continue;
+            /* udpRxBuffer may be encrypted, so it is best not to do anything other than forwarding data */
             if (isServer) {
-                if (macDst & 0x01) {
+                if (isBroadcast) {
                     for (auto it = macToIPv6Map.begin(); it != macToIPv6Map.end(); ++it) {
-                        if (it->first != macSrc)
-                            ssize_t sendBytes = tapLanSendToUdpSocket(udpRxBuffer, recvBytes, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
+                        if (memcmp(&it->first.address, &eh.ether_shost, 6) != 0)
+                            tapLanSendToUdpSocket(udpRxBuffer, recvBytes, (sockaddr*)&(it->second), sizeof(sockaddr_in6));
                     }
-                } else {
-                    auto it = macToIPv6Map.find(macDst);
+                } else if (!isSendToMe) {
+                    auto it = macToIPv6Map.find(eh.ether_dhost);
                     if (it != macToIPv6Map.end()) {
-                        ssize_t sendBytes = tapLanSendToUdpSocket(udpRxBuffer, recvBytes, (struct sockaddr*)&(it->second), sizeof(struct sockaddr_in6));
+                        tapLanSendToUdpSocket(udpRxBuffer, recvBytes, (sockaddr*)&(it->second), sizeof(sockaddr_in6));
                     }
                 }
             }
-        } else {
-            // recvfrom failed
+        }
+    }
+}
+
+void TapLan::keepConnectedWithServer() {
+    uint8_t msgBuffer[256];
+    while (run_flag) {
+        TapLanDHCPMessage& msg = (TapLanDHCPMessage&)msgBuffer;
+        size_t msgLen = sizeof(TapLanDHCPMessage);
+        tapLanGenerateDHCPDiscover(myMAC, msg);
+        if (isSecurity && !tapLanEncryptDataWithAes((uint8_t*)&msg, msgLen, key))
+            continue;
+        tapLanSendToUdpSocket(&msg, msgLen, (sockaddr*)&gatewayAddr, sizeof(gatewayAddr));
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        if (myIP == 0) {
+            TapLanDHCPLogError("No TapLanDHCP server found.");
         }
     }
 }
@@ -125,7 +140,7 @@ bool TapLan::start() {
         TapLanLogInfo("TapLan %s is running.", (isServer? "server": "client"));
         if (isServer) {
             std::ostringstream cmd;
-            struct in_addr ipAddr;
+            in_addr ipAddr;
             ipAddr.s_addr = htonl(netID + 1);
 #ifdef _WIN32
             cmd << "netsh interface ip set address \"tapLan\" static " << inet_ntoa(ipAddr) << "/" << +netIDLen;
@@ -139,7 +154,7 @@ bool TapLan::start() {
                 TapLanLogInfo("tapLan IP address has been set to %s/%d.", inet_ntoa(ipAddr), netIDLen);
             }
         } else {
-            threadKeepConnectedWithServer = std::thread(tapLanSendDHCPDiscover, (uint8_t*)&myMAC);
+            threadKeepConnectedWithServer = std::thread(std::bind(&TapLan::keepConnectedWithServer, this));
         }
         return true;
     }
@@ -149,6 +164,8 @@ bool TapLan::start() {
 bool TapLan::stop() {
     if (run_flag) return false;
     run_flag = false;
+    tapLanCloseTapDevice();
+    tapLanCloseUdpSocket();
     if (threadReadFromTapAndSendToSocket.joinable())
         threadReadFromTapAndSendToSocket.join();
     if (threadRecvFromSocketAndForwardToTap.joinable())

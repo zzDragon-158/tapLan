@@ -24,7 +24,7 @@ struct WinAdapterInfo {
     }
 };
 
-static struct WinAdapterInfo tapLanTapDevice;
+static WinAdapterInfo tapLanTapDevice;
 
 bool tapLanOpenTapDevice() {
     bool ret = false;
@@ -36,7 +36,7 @@ bool tapLanOpenTapDevice() {
     }
     // 遍历注册表目录 NETWORK_CONNECTIONS_KEY 下的所有网络适配器
     for (int i = 0; ; ++i) {
-        struct WinAdapterInfo adapter;
+        WinAdapterInfo adapter;
         // 获取 adapterId
         if (RegEnumKeyExA(openkey0, i, adapter.adapterId, &adapter.adapterIdLen, nullptr, nullptr, nullptr, nullptr))
             break;
@@ -56,7 +56,7 @@ bool tapLanOpenTapDevice() {
         adapter.handle = CreateFileA(tapName.str().c_str(), GENERIC_WRITE | GENERIC_READ, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, 0);
         if (adapter.handle != INVALID_HANDLE_VALUE) {
             if (0 == strcmp("tapLan", (const char*)adapter.adapterName)) {
-                memcpy(&tapLanTapDevice, &adapter, sizeof(struct WinAdapterInfo));
+                memcpy(&tapLanTapDevice, &adapter, sizeof(WinAdapterInfo));
                 if (!DeviceIoControl(tapLanTapDevice.handle, TAP_IOCTL_SET_MEDIA_STATUS,
                     &tapLanTapDevice.mediaStatus, tapLanTapDevice.mediaStatusLen,
                     &tapLanTapDevice.mediaStatus, tapLanTapDevice.mediaStatusLen, &tapLanTapDevice.mediaStatusLen, nullptr)) {
@@ -149,7 +149,7 @@ bool tapLanOpenTapDevice() {
         TapLanDriveLogError("Can not open [/dev/net/tun].");
         return false;
     }
-    struct ifreq ifr;
+    ifreq ifr;
     memset(&ifr, 0, sizeof(ifr));
     ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
     strncpy(ifr.ifr_name, "tapLan", IFNAMSIZ);

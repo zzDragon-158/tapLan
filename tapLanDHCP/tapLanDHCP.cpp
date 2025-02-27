@@ -1,73 +1,53 @@
 #include "tapLanDHCP.hpp"
 
-bool run_flag = true;
-uint32_t ipAddrStart = 2;
-int32_t xid = 0;
+int32_t last_xid = 0;
 uint32_t last_ipaddr = 0;
-std::unordered_map<uint64_t, uint32_t> macToHostIDMap;
+uint32_t ipAddrStart = 2;
+std::unordered_map<TapLanMACAddress, uint32_t> macToHostIDMap;
 
-bool tapLanSendDHCPDiscover(uint8_t* macAddress) {
-    struct TapLanDHCPMessage msg;
+void tapLanGenerateDHCPDiscover(const TapLanMACAddress& mac, TapLanDHCPMessage& msg) {
     srand((unsigned int)time(0));
-    xid = rand();
-    while (run_flag) {
-        memset(&msg, 0, sizeof(msg));
-        msg.xid = xid;
-        msg.op = 1;
-        memcpy(msg.mac, macAddress, 6);
-        ssize_t sendBytes = tapLanSendToUdpSocket(&msg, sizeof(msg), (sockaddr*)&gatewayAddr, sizeof(gatewayAddr));
-        if (sendBytes != sizeof(msg)) {
-            TapLanDHCPLogError("Sending TapLanDHCP discover failed.");
-        }
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-        if (last_ipaddr == 0) {
-            TapLanDHCPLogError("No TapLanDHCP server found.");
-        }
+    memset(&msg, 0, sizeof(msg));
+    msg.xid = rand();
+    last_xid = msg.xid;
+    msg.op = 1;
+    memcpy(msg.mac, mac.address, 6);
+}
+
+bool tapLanHandleDHCPDiscover(const uint32_t& netID, const int& netIDLen, TapLanDHCPMessage& msg) {
+    if (msg.op != 1 || msg.netIDLen != 0 || msg.addr != 0 || msg.mac[0] & 0x01) {
+        return false;
     }
+    tapLanGenerateDHCPOffer(netID, netIDLen, msg);
     return true;
 }
 
-void tapLanClearRunFlag() 
-{
-    run_flag = false;
-}
-
-bool tapLanHandleDHCPDiscover(uint32_t netID, int netIDLen, struct TapLanDHCPMessage& msg, const struct sockaddr* dstAddr, socklen_t addrLen) {
-    if (msg.op != 1 || msg.netIDLen != 0 || msg.addr != 0) {
-        return false;
-    }
-    uint64_t mac = 0;
-    memcpy(&mac, msg.mac, 6);
+void tapLanGenerateDHCPOffer(const uint32_t& netID, const int& netIDLen, TapLanDHCPMessage& msg) {
     uint32_t ipAddr = netID;
-    auto it = macToHostIDMap.find(mac);
+    auto it = macToHostIDMap.find(msg.mac);
     if (it != macToHostIDMap.end()) {
         ipAddr += it->second;
     } else {
         ipAddr += ipAddrStart;
-        macToHostIDMap[mac] = ipAddrStart;
-        TapLanDHCPLogInfo("New device connected, macAddress[%llX] hostID: %u", mac, ipAddrStart);
+        macToHostIDMap[msg.mac] = ipAddrStart;
         ++ipAddrStart;
+        TapLanDHCPLogInfo("New device connected, macAddress[%.2X:%.2X:%.2X:%.2X:%.2X:%.2X] "
+            "ipAddress: %u.%u.%u.%u",
+            msg.mac[0], msg.mac[1], msg.mac[2], msg.mac[3], msg.mac[4], msg.mac[5],
+            ((ipAddr >> 24) & 0xff), ((ipAddr >> 16) & 0xff), ((ipAddr >> 8) & 0xff), (ipAddr & 0xff));
     }
     msg.op = 2;
     msg.addr = ipAddr;
     msg.netIDLen = netIDLen;
-    ssize_t sendBytes = tapLanSendToUdpSocket(&msg, sizeof(msg), dstAddr, addrLen);
-    if (sendBytes != sizeof(msg)) {
-        TapLanDHCPLogError("Sending TapLanDHCP offer failed.");
-        return false;
-    }
-    mac = 0;
-    memcpy(&mac, msg.mac, 6);
-    return true;
 }
 
-bool tapLanHandleDHCPOffer(struct TapLanDHCPMessage& msg) {
-    if (msg.op != 2 || msg.addr == 0 || msg.xid != xid)
+bool tapLanHandleDHCPOffer(const TapLanDHCPMessage& msg) {
+    if (msg.op != 2 || msg.addr == 0 || msg.xid != last_xid)
         return false;
     std::ostringstream cmd;
     if (last_ipaddr != msg.addr) {
         last_ipaddr = msg.addr;
-        struct in_addr ipAddr;
+        in_addr ipAddr;
         ipAddr.s_addr = htonl(msg.addr);
 #ifdef _WIN32
         cmd << "netsh interface ip set address \"tapLan\" static " << inet_ntoa(ipAddr) << "/" << +msg.netIDLen;
