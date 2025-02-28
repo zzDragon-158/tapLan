@@ -1,4 +1,13 @@
 #include "tapLanDrive.hpp"
+
+#define likely(x) __builtin_expect(!!(x), 1) 
+#define unlikely(x) __builtin_expect(!!(x), 0)
+
+uint64_t tapWriteErrorCnt = 0;
+uint64_t tapReadErrorCnt = 0;
+uint64_t dwc = 0;
+uint64_t drc = 0;
+
 #ifdef _WIN32
 struct WinAdapterInfo {
     HANDLE handle;
@@ -97,19 +106,23 @@ bool tapLanGetMACAddress(uint8_t* buf, size_t bufLen) {
 
 ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen) {
     static DWORD writeBytes;
-    if (WriteFile(tapLanTapDevice.handle, buf, bufLen, &writeBytes, &tapLanTapDevice.overlapWrite)) {
+    if (unlikely(WriteFile(tapLanTapDevice.handle, buf, bufLen, &writeBytes, &tapLanTapDevice.overlapWrite))) {
         ResetEvent(tapLanTapDevice.overlapWrite.hEvent);
+        ++dwc;
         return writeBytes;
     } else {
         DWORD lastError = GetLastError();
-        if (lastError == ERROR_IO_PENDING) {
+        if (likely(lastError == ERROR_IO_PENDING)) {
             GetOverlappedResult(tapLanTapDevice.handle, &tapLanTapDevice.overlapWrite, &writeBytes, TRUE);
             ResetEvent(tapLanTapDevice.overlapWrite.hEvent);
-            if (writeBytes < bufLen)
+            if (unlikely(writeBytes < bufLen)) {
                 TapLanDriveLogError("writeBytes[%lld] is less than expected[%lu].", writeBytes, bufLen);
+                ++tapWriteErrorCnt;
+            }
             return writeBytes;
         } else {
             TapLanDriveLogError("Writting to tap device failed.");
+            ++tapWriteErrorCnt;
             return -1;
         }
     }
@@ -117,17 +130,19 @@ ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen) {
 
 ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen) {
     static DWORD readBytes;
-    if (ReadFile(tapLanTapDevice.handle, buf, bufLen, &readBytes, &tapLanTapDevice.overlapRead)) {
+    if (unlikely(ReadFile(tapLanTapDevice.handle, buf, bufLen, &readBytes, &tapLanTapDevice.overlapRead))) {
         ResetEvent(tapLanTapDevice.overlapRead.hEvent);
+        ++drc;
         return readBytes;
     } else {
         DWORD lastError = GetLastError();
-        if (lastError == ERROR_IO_PENDING) {
+        if (likely(lastError == ERROR_IO_PENDING)) {
             GetOverlappedResult(tapLanTapDevice.handle, &tapLanTapDevice.overlapRead, &readBytes, TRUE);
             ResetEvent(tapLanTapDevice.overlapRead.hEvent);
             return readBytes;
         } else {
             TapLanDriveLogError("Reading from tap device failed.");
+            ++tapReadErrorCnt;
             return -1;
         }
     }
@@ -180,15 +195,19 @@ bool tapLanGetMACAddress(uint8_t* buf, size_t bufLen) {
 
 ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen) {
     ssize_t writeBytes = write(tap_fd, buf, bufLen);
-    if (writeBytes < bufLen)
+    if (unlikely(writeBytes < bufLen)) {
         TapLanDriveLogError("writeBytes[%lld] is less than expected[%lu].", writeBytes, bufLen);
+        ++tapWriteErrorCnt;
+    }
     return writeBytes;
 }
 
 ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen) {
     ssize_t readBytes = read(tap_fd, buf, bufLen);
-    if (readBytes == -1)
+    if (unlikely(readBytes == -1)) {
         TapLanDriveLogError("Reading from tap device failed.");
+        ++tapReadErrorCnt;
+    }
     return readBytes;
 }
 

@@ -64,3 +64,4 @@ void tapLanGenerateDHCPDiscover(const TapLanMACAddress& mac, TapLanDHCPMessage& 
 bool tapLanHandleDHCPDiscover(const uint32_t& netID, const int& netIDLen, TapLanDHCPMessage& msg);
 void tapLanGenerateDHCPOffer(const uint32_t& netID, const int& netIDLen, TapLanDHCPMessage& msg);
 bool tapLanHandleDHCPOffer(const TapLanDHCPMessage& msg);
+bool tapLanGetHostID(const TapLanMACAddress& mac, uint32_t& hostID);

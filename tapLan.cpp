@@ -132,6 +132,41 @@ void TapLan::keepConnectedWithServer() {
     }
 }
 
+void TapLan::showErrorCount() {
+    fprintf(stdout, "tapWriteError: %llu [dwc: %llu]\n", tapWriteErrorCnt, dwc);
+    fprintf(stdout, "tapReadError: %llu [drc: %llu]\n", tapReadErrorCnt, drc);
+    fprintf(stdout, "udpSendError: %llu\n", udpSendErrCnt);
+    fprintf(stdout, "udpRecvError: %llu\n", udpRecvErrCnt);
+    fflush(stdout);
+}
+
+void TapLan::showFIB() {
+    fprintf(stdout, "tapLan MAC address    tapLan IP address    Public IP address\n");
+  //fprintf(stdout, "00:00:00:00:00:00     255.255.255.255      aaaa:bbbb:cccc:dddd:eeee:ffff:aaaa:bbbb");
+    for (const auto& pair : macToIPv6Map) {
+        char tapmacbuf[32];
+        sprintf(tapmacbuf, "%.2X:%.2X:%.2X:%.2X:%.2X:%.2X",
+            pair.first.address[0], pair.first.address[1], pair.first.address[2], 
+            pair.first.address[3], pair.first.address[4], pair.first.address[5]);
+
+        char ipv6buf[INET6_ADDRSTRLEN];
+        inet_ntop(AF_INET6, &pair.second.sin6_addr, ipv6buf, INET6_ADDRSTRLEN);
+
+        char tapipbuf[INET_ADDRSTRLEN];
+        uint32_t ipAddr;
+        if (tapLanGetHostID(pair.first, ipAddr)) {
+            ipAddr += netID;
+            sprintf(tapipbuf, "%u.%u.%u.%u", ((ipAddr >> 24) & 0xff), ((ipAddr >> 16) & 0xff),
+                ((ipAddr >> 8) & 0xff), (ipAddr & 0xff));
+        }
+
+        char buf[128];
+        sprintf(buf, "%-22s%-21s[%s]:%u\n", tapmacbuf, tapipbuf, ipv6buf, ntohs(pair.second.sin6_port));
+        fprintf(stdout, "%s", buf);
+    }
+    fflush(stdout);
+}
+
 bool TapLan::start() {
     if (!run_flag) return false;
     threadReadFromTapAndSendToSocket = std::thread(std::bind(&TapLan::readFromTapAndSendToSocket, this));

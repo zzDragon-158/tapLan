@@ -31,6 +31,11 @@ struct ether_header {
     uint16_t ether_type;
 };
 
+extern uint64_t tapWriteErrorCnt;
+extern uint64_t tapReadErrorCnt;
+extern uint64_t dwc;
+extern uint64_t drc;
+
 bool tapLanOpenTapDevice();
 bool tapLanCloseTapDevice();
 bool tapLanGetMACAddress(uint8_t* buf, size_t bufLen);

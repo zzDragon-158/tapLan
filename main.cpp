@@ -68,8 +68,8 @@ int main(int argc, char* argv[]) {
                 key = optarg;
                 break;
             } case 'h': {
-                printf("Usage as server: %s [-s <CIDR>] [-p <server port>]\n", argv[0]);
-                printf("Usage as client: %s [-c <server address>] [-p <server port>]\n", argv[0]);
+                printf("Usage as server: %s [-s <CIDR>] [-p <server port>] [-k <aes key>]\n", argv[0]);
+                printf("Usage as client: %s [-c <server address>] [-p <server port>] [-k <aes key>]\n", argv[0]);
                 return 1;
             }
         }
@@ -84,13 +84,18 @@ int main(int argc, char* argv[]) {
     if (!pTapLan->start())
         return -1;
     std::string input;
+    std::cout << "enter \"quit\" to exit" << std::endl;
     while (true) {
-        std::cout << "enter \"quit\" to exit" << std::endl;
+        std::cout << "tapLan> " << std::flush;
         std::getline(std::cin, input);
         if (input == "quit") {
             std::cout << "Waiting for thread termination......" << std::endl;
             pTapLan->stop();
             break;
+        } else if (input == "show error") {
+            pTapLan->showErrorCount();
+        } else if (input == "show fib") {
+            pTapLan->showFIB();
         }
     }
     std::cout << "The program has exited" << std::endl;

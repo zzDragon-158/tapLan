@@ -65,3 +65,12 @@ bool tapLanHandleDHCPOffer(const TapLanDHCPMessage& msg) {
     }
     return true;
 }
+
+bool tapLanGetHostID(const TapLanMACAddress& mac, uint32_t& hostID) {
+    auto it = macToHostIDMap.find(mac);
+    if (it != macToHostIDMap.end()) {
+        hostID = it->second;
+        return true;
+    }
+    return false;
+}

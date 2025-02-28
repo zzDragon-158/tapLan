@@ -16,6 +16,8 @@ public:
     TapLan(uint16_t serverPort, uint32_t netID, int netIDLen, const char* key);      // server
     TapLan(const char* serverAddr, const uint16_t serverPort, const char* key);      // client
     ~TapLan();
+    void showErrorCount();
+    void showFIB();
     bool start();
     bool stop();
 
