@@ -5,11 +5,12 @@
 #include <getopt.h>
 
 bool isRunningAsAdmin();
+void tapLanExit(int code = 0, int64_t delaySeconds = 0);
 
 int main(int argc, char* argv[]) {
     if (!isRunningAsAdmin()) {
         fprintf(stderr, "Please run this program as an administrator or root\n");
-        return -1;
+        tapLanExit(-1, 3);
     }
     bool isServer = true;
     uint32_t netID = 3232298496;
@@ -26,12 +27,12 @@ int main(int argc, char* argv[]) {
                 size_t cidrLen = strlen(optarg);
                 if (optarg[cidrLen - 3] != '/') {
                     fprintf(stderr, "your input cidr is invalid\n");
-                    return -1;
+                    tapLanExit(-1, 3);
                 }
                 netIDLen = atoi(optarg + cidrLen - 2);
                 if (16 > netIDLen || netIDLen > 24) {
                     fprintf(stderr, "your input netIDLen is invalid\n");
-                    return -1;
+                    tapLanExit(-1, 3);
                 }
                 char ipv4addr[INET_ADDRSTRLEN];
                 memcpy(ipv4addr, optarg, cidrLen - 3);
@@ -39,7 +40,7 @@ int main(int argc, char* argv[]) {
                 struct sockaddr_in sa;
                 if (inet_pton(AF_INET, ipv4addr, &(sa.sin_addr)) == 0) {
                     std::cerr << "your input netID: " << ipv4addr << std::endl;
-                    return -1;
+                    tapLanExit(-1, 3);
                 }
                 netID = ntohl(sa.sin_addr.s_addr);
                 netID = (netID >> (32 - netIDLen)) << (32 - netIDLen);
@@ -51,7 +52,7 @@ int main(int argc, char* argv[]) {
                 if (inet_pton(AF_INET6, serverAddr + serverAddrOffset, &(sa.sin6_addr)) == 0) {
                     if (inet_pton(AF_INET6, serverAddr, &(sa.sin6_addr)) == 0) {
                         fprintf(stderr, "your input IP address is invalid\n");
-                        return 1;
+                        tapLanExit(-1, 3);
                     }
                 } else {
                     memmove(serverAddr, serverAddr + serverAddrOffset, strlen(serverAddr + serverAddrOffset) + 1);
@@ -61,7 +62,7 @@ int main(int argc, char* argv[]) {
                 port = atoi(optarg);
                 if (port > 65535) {
                     fprintf(stderr, "port number is invalid, range 0-65535");
-                    return 1;
+                    tapLanExit(-1, 3);
                 }
                 break;
             } case 'k': {
@@ -70,7 +71,7 @@ int main(int argc, char* argv[]) {
             } case 'h': {
                 printf("Usage as server: %s [-s <CIDR>] [-p <server port>] [-k <aes key>]\n", argv[0]);
                 printf("Usage as client: %s [-c <server address>] [-p <server port>] [-k <aes key>]\n", argv[0]);
-                return 1;
+                tapLanExit(-1, 3);
             }
         }
     }
@@ -82,7 +83,7 @@ int main(int argc, char* argv[]) {
         pTapLan = new TapLan(serverAddr, port, key);
     }
     if (!pTapLan->start())
-        return -1;
+        tapLanExit(-1, 3);
     std::string input;
     std::cout << "enter \"quit\" to exit" << std::endl;
     while (true) {
@@ -98,7 +99,8 @@ int main(int argc, char* argv[]) {
             pTapLan->showFIB();
         }
     }
-    std::cout << "The program has exited" << std::endl;
+    std::cout << "The program has exited." << std::endl;
+    tapLanExit(0, 3);
     return 0;
 }
 
@@ -125,3 +127,8 @@ bool isRunningAsAdmin() {
 }
 
 #endif
+
+void tapLanExit(int code, int64_t delaySeconds) {
+    std::this_thread::sleep_for(std::chrono::seconds(delaySeconds));
+    exit(code);
+}
