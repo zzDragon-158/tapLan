@@ -76,7 +76,7 @@ static bool tapLanCreateTapDevice() {
     }
     DWORD attributes = GetFileAttributesA(TAP_INSTALL);
     if (attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
-        if (system(TAP_INSTALL " install D:\\linux_share\\tapLan\\build\\OemVista.inf TAP0901")) {
+        if (system(TAP_INSTALL " install OemVista.inf TAP0901")) {
             TapLanDriveLogError("Creating tap device failed.");
             return ret;
         }
