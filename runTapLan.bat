@@ -5,5 +5,5 @@
 :: %exe_path% -c "引号内替换为服务器的公网IP地址(就算你能直接PING通的IP地址)" -p "引号内替换为服务端设置的端口号"
 
 cd /d %~dp0
-set exe_path=.\tapLan_amd64_windows.exe
+set exe_path=.\tapLan.exe
 start /B %exe_path% -s 192.168.246.0/24 -p 3460
