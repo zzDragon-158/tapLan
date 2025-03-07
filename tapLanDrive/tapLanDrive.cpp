@@ -11,14 +11,14 @@ uint64_t drc = 0;
 #ifdef _WIN32
 struct WinAdapterInfo {
     HANDLE handle;
-    char adapterId[BUFFER_SIZE];
-    unsigned long int adapterIdLen;
-    unsigned char adapterName[BUFFER_SIZE];
-    unsigned long int adapterNameLen;
-    unsigned char adapterMAC[6];
-    unsigned long int adapterMACLen;
-    ULONG mediaStatus;
-    unsigned long int mediaStatusLen;
+    CHAR adapterId[BUFFER_SIZE];
+    DWORD adapterIdLen;
+    CHAR adapterName[BUFFER_SIZE];
+    DWORD adapterNameLen;
+    CHAR adapterMAC[6];
+    DWORD adapterMACLen;
+    DWORD mediaStatus;
+    DWORD mediaStatusLen;
     OVERLAPPED overlapRead, overlapWrite;
 
     WinAdapterInfo(): handle(nullptr), adapterIdLen(BUFFER_SIZE), adapterNameLen(BUFFER_SIZE), adapterMACLen(6),
@@ -35,64 +35,148 @@ struct WinAdapterInfo {
 
 static WinAdapterInfo tapLanTapDevice;
 
-bool tapLanOpenTapDevice() {
+static bool tapLanFindTapDevice() {
     bool ret = false;
-    HKEY openkey0;
-    // 获取网络适配器列表
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, NETWORK_CONNECTIONS_KEY, 0, KEY_READ, &openkey0)) {
-        TapLanDriveLogError("Openning registry failed.");
-        return false;
+    HKEY openKey0;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, NETWORK_CONNECTIONS_KEY, 0, KEY_READ, &openKey0)) {
+        TapLanDriveLogError("Openning %s failed.", NETWORK_CONNECTIONS_KEY);
+        return ret;
     }
-    // 遍历注册表目录 NETWORK_CONNECTIONS_KEY 下的所有网络适配器
     for (int i = 0; ; ++i) {
         WinAdapterInfo adapter;
-        // 获取 adapterId
-        if (RegEnumKeyExA(openkey0, i, adapter.adapterId, &adapter.adapterIdLen, nullptr, nullptr, nullptr, nullptr))
+        if (RegEnumKeyExA(openKey0, i, adapter.adapterId, &adapter.adapterIdLen, nullptr, nullptr, nullptr, nullptr))
             break;
-        // 获取 adapterName
         std::ostringstream regpath;
         regpath << NETWORK_CONNECTIONS_KEY << "\\" << adapter.adapterId << "\\Connection";
-        HKEY openkey1;
-        if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, regpath.str().c_str(), 0, KEY_READ, &openkey1))
+        HKEY openKey1;
+        if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, regpath.str().c_str(), 0, KEY_READ, &openKey1))
             continue;
-        int err = RegQueryValueExA(openkey1, "Name", nullptr, nullptr, adapter.adapterName, &adapter.adapterNameLen);
-        RegCloseKey(openkey1);
-        if (err)
+        int err = RegQueryValueExA(openKey1, "Name", nullptr, nullptr, (LPBYTE)adapter.adapterName, &adapter.adapterNameLen);
+        if (err) {
+            RegCloseKey(openKey1);
             continue;
-        // 获取 handle
-        std::ostringstream tapName;
-        tapName << USERMODEDEVICEDIR << adapter.adapterId << TAPSUFFIX;
-        adapter.handle = CreateFileA(tapName.str().c_str(), GENERIC_WRITE | GENERIC_READ, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, 0);
-        if (adapter.handle != INVALID_HANDLE_VALUE) {
-            if (0 == strcmp("tapLan", (const char*)adapter.adapterName)) {
-                memcpy(&tapLanTapDevice, &adapter, sizeof(WinAdapterInfo));
-                if (!DeviceIoControl(tapLanTapDevice.handle, TAP_IOCTL_SET_MEDIA_STATUS,
-                    &tapLanTapDevice.mediaStatus, tapLanTapDevice.mediaStatusLen,
-                    &tapLanTapDevice.mediaStatus, tapLanTapDevice.mediaStatusLen, &tapLanTapDevice.mediaStatusLen, nullptr)) {
-                    TapLanDriveLogError("DeviceIoControl(TAP_IOCTL_SET_MEDIA_STATUS) failed.");
-                    ret = false;
-                    break;
-                }
-                if (!DeviceIoControl(tapLanTapDevice.handle, TAP_IOCTL_GET_MAC,
-                    tapLanTapDevice.adapterMAC, tapLanTapDevice.adapterMACLen,
-                    tapLanTapDevice.adapterMAC, tapLanTapDevice.adapterMACLen, &tapLanTapDevice.adapterMACLen, nullptr)) {
-                    TapLanDriveLogError("DeviceIoControl(TAP_IOCTL_GET_MAC) failed.");
-                    ret = false;
-                    break;
-                }
-                ret = true;
-                break;
-            } else {
-                CloseHandle(adapter.handle);
-            }
+        }
+        RegCloseKey(openKey1);
+        if (0 != strcmp(TAP_NAME, (const char*)adapter.adapterName))
+            continue;
+        memcpy(&tapLanTapDevice, &adapter, sizeof(WinAdapterInfo));
+        ret = true;
+        break;
+    }
+    RegCloseKey(openKey0);
+    return ret;
+}
+
+static bool tapLanCreateTapDevice() {
+    bool ret = false;
+    DWORD64 startTimestamp; {
+        FILETIME ft;
+        GetSystemTimeAsFileTime(&ft);
+        memcpy(&startTimestamp, &ft, 8);
+    }
+    DWORD attributes = GetFileAttributesA(TAP_INSTALL);
+    if (attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        if (system(TAP_INSTALL " install D:\\linux_share\\tapLan\\build\\OemVista.inf TAP0901")) {
+            TapLanDriveLogError("Creating tap device failed.");
+            return ret;
+        }
+    } else {
+        TapLanDriveLogError("%s does not exist. Please place this program in the current directory.", TAP_INSTALL);
+        return ret;
+    }
+    HKEY openKey0;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, ADAPTER_KEY, 0, KEY_READ, &openKey0)) {
+        TapLanDriveLogError("Openning %s failed.", ADAPTER_KEY);
+        return false;
+    }
+    for (int i = 0; ; ++i) {
+        WinAdapterInfo adapter;
+        CHAR driveId[BUFFER_SIZE];
+        DWORD driveIdLen = BUFFER_SIZE;
+        if (RegEnumKeyExA(openKey0, i, driveId, &driveIdLen, nullptr, nullptr, nullptr, nullptr))
+            break;
+        std::ostringstream regpath;
+        regpath << ADAPTER_KEY << "\\" << driveId;
+        HKEY openKey1;
+        if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, regpath.str().c_str(), 0, KEY_READ, &openKey1))
+            continue;
+        DWORD64 installTimestamp;
+        DWORD installTimestampLen = sizeof(installTimestamp);
+        LONG err;
+        err = RegQueryValueExA(openKey1, "NetworkInterfaceInstallTimestamp", nullptr, nullptr, (UCHAR*)&installTimestamp, &installTimestampLen);
+        if (err || installTimestamp < startTimestamp) {
+            RegCloseKey(openKey1);
+            continue;
+        }
+        CHAR providerName[BUFFER_SIZE];
+        DWORD providerNameLen = BUFFER_SIZE;
+        err = RegQueryValueExA(openKey1, "ProviderName", nullptr, nullptr, (UCHAR*)&providerName, &providerNameLen);
+        if (err || strcmp("TAP-Windows Provider V9", (const char*)providerName)) {
+            RegCloseKey(openKey1);
+            continue;
+        }
+        err = RegQueryValueExA(openKey1, "NetCfgInstanceId", nullptr, nullptr, (UCHAR*)adapter.adapterId, &adapter.adapterIdLen);
+        if (err) {
+            RegCloseKey(openKey1);
+            continue;
+        }
+        RegCloseKey(openKey1);
+        regpath.str("");
+        regpath << NETWORK_CONNECTIONS_KEY << "\\" << adapter.adapterId << "\\Connection";
+        if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, regpath.str().c_str(), 0, KEY_READ, &openKey1)) {
+            TapLanDriveLogError("Openning %s failed.", regpath.str().c_str());
+            break;
+        }
+        err = RegQueryValueExA(openKey1, "Name", nullptr, nullptr, (LPBYTE)adapter.adapterName, &adapter.adapterNameLen);
+        if (err) {
+            RegCloseKey(openKey1);
+            TapLanDriveLogError("Getting tap device name failed.");
+            break;
+        }
+        RegCloseKey(openKey1);
+        std::ostringstream cmd;
+        cmd << "netsh interface set interface name=\"" << adapter.adapterName << "\" newname=\"" << TAP_NAME << "\"";
+        if (system(cmd.str().c_str())) {
+            TapLanDriveLogError("Rename tap device failed.");
+            break;
+        }
+        strcpy(adapter.adapterName, TAP_NAME);
+        adapter.adapterNameLen = strlen(TAP_NAME) + 1;
+        memcpy(&tapLanTapDevice, &adapter, sizeof(WinAdapterInfo));
+        ret = true;
+        break;
+    }
+    RegCloseKey(openKey0);
+    return ret;
+}
+
+bool tapLanOpenTapDevice() {
+    if (!tapLanFindTapDevice() && !tapLanCreateTapDevice())
+        return false;
+    std::ostringstream tapName;
+    tapName << USERMODEDEVICEDIR << tapLanTapDevice.adapterId << TAPSUFFIX;
+    tapLanTapDevice.handle = CreateFileA(tapName.str().c_str(), GENERIC_WRITE | GENERIC_READ, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, 0);
+    if (tapLanTapDevice.handle != INVALID_HANDLE_VALUE) {
+        if (!DeviceIoControl(tapLanTapDevice.handle, TAP_IOCTL_SET_MEDIA_STATUS,
+            &tapLanTapDevice.mediaStatus, tapLanTapDevice.mediaStatusLen,
+            &tapLanTapDevice.mediaStatus, tapLanTapDevice.mediaStatusLen, &tapLanTapDevice.mediaStatusLen, nullptr)) {
+            TapLanDriveLogError("DeviceIoControl(TAP_IOCTL_SET_MEDIA_STATUS) failed.");
+            return false;
+        }
+        if (!DeviceIoControl(tapLanTapDevice.handle, TAP_IOCTL_GET_MAC,
+            tapLanTapDevice.adapterMAC, tapLanTapDevice.adapterMACLen,
+            tapLanTapDevice.adapterMAC, tapLanTapDevice.adapterMACLen, &tapLanTapDevice.adapterMACLen, nullptr)) {
+            TapLanDriveLogError("DeviceIoControl(TAP_IOCTL_GET_MAC) failed.");
+            return false;
         }
     }
-    RegCloseKey(openkey0);
-    return ret;
+    return true;
 }
 
 bool tapLanCloseTapDevice() {
     CloseHandle(tapLanTapDevice.handle);
+    // if (system(TAP_INSTALL " remove TAP0901"))
+    //     TapLanDriveLogError("Removing tap device failed.");
     return true;
 }
 
@@ -167,7 +251,7 @@ bool tapLanOpenTapDevice() {
     ifreq ifr;
     memset(&ifr, 0, sizeof(ifr));
     ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-    strncpy(ifr.ifr_name, "tapLan", IFNAMSIZ);
+    strncpy(ifr.ifr_name, TAP_NAME, IFNAMSIZ);
     if (ioctl(tap_fd, TUNSETIFF, (void*)&ifr) == -1) {
         TapLanDriveLogError("ioctl(TUNSETIFF) failed.");
         return false;
@@ -182,6 +266,7 @@ bool tapLanOpenTapDevice() {
 
 bool tapLanCloseTapDevice() {
     close(tap_fd);
+    system("ip link del dev tapLan");
     return true;
 }
 

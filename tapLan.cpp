@@ -197,7 +197,7 @@ bool TapLan::start() {
 }
 
 bool TapLan::stop() {
-    if (run_flag) return false;
+    if (!run_flag) return false;
     run_flag = false;
     tapLanCloseTapDevice();
     tapLanCloseUdpSocket();
