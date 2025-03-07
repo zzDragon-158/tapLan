@@ -129,6 +129,10 @@ bool isRunningAsAdmin() {
 #endif
 
 void tapLanExit(int code, int64_t delaySeconds) {
+#ifdef _WIN32
+    std::cout << "This window will close in 3 seconds." << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(delaySeconds));
+#endif
+
     exit(code);
 }
