@@ -91,11 +91,11 @@ int main(int argc, char* argv[]) {
         std::getline(std::cin, input);
         if (input == "quit") {
             std::cout << "Waiting for thread termination......" << std::endl;
-            pTapLan->stop();
+            // pTapLan->stop();
             break;
-        } else if (input == "show error") {
+        } else if (input == "showerr") {
             pTapLan->showErrorCount();
-        } else if (input == "show fib") {
+        } else if (input == "showfib") {
             pTapLan->showFIB();
         }
     }

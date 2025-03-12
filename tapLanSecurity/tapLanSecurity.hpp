@@ -3,6 +3,9 @@
 #include <cstring>
 #include <openssl/evp.h>
 
+#define TapLanSecLogInfo(fmt, ...)         fprintf(stdout, "[TapLanSec] [INFO] " fmt "\n", ##__VA_ARGS__)
+#define TapLanSecLogError(fmt, ...)        fprintf(stderr, "[TapLanSec] [ERROR] " fmt "\n", ##__VA_ARGS__)
+
 struct TapLanKey {
     uint8_t aesKey[16];
     TapLanKey() {
@@ -26,6 +29,8 @@ struct TapLanKey {
         return *this;
     }
 };
+extern int encryptDataErrCnt;
+extern int decryptDataErrCnt;
 
 bool tapLanEncryptDataWithAes(uint8_t* data, size_t& dataLen, const TapLanKey& key);
 bool tapLanDecryptDataWithAes(uint8_t* data, size_t& dataLen, const TapLanKey& key);

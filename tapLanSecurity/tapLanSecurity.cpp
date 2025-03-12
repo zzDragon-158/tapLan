@@ -1,47 +1,59 @@
 #include "tapLanSecurity.hpp"
 
+int encryptDataErrCnt = 0;
+int decryptDataErrCnt = 0;
+
 bool tapLanEncryptDataWithAes(uint8_t* data, size_t& dataLen, const TapLanKey& key) {
+    bool ret = false;
     int out_len, final_len;
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {
+        TapLanSecLogError("EVP_CIPHER_CTX_new() failed.");
         return false;
     }
     if (EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), nullptr, key.aesKey, key.aesKey) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return false;
+        TapLanSecLogError("EVP_EncryptInit_ex() failed.");
+        goto EncryptDataExit;
     }
     if (EVP_EncryptUpdate(ctx, data, &out_len, data, dataLen) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return false;
+        TapLanSecLogError("EVP_EncryptUpdate() failed.");
+        goto EncryptDataExit;
     }
     if (EVP_EncryptFinal_ex(ctx, data + out_len, &final_len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return false;
+        TapLanSecLogError("EVP_EncryptFinal_ex() failed.");
+        goto EncryptDataExit;
     }
-    EVP_CIPHER_CTX_free(ctx);
+    ret = true;
     dataLen = out_len + final_len;
-    return true;
+EncryptDataExit:
+    EVP_CIPHER_CTX_free(ctx);
+    if (!ret) ++encryptDataErrCnt;
+    return ret;
 }
 
 bool tapLanDecryptDataWithAes(uint8_t* data, size_t& dataLen, const TapLanKey& key) {
+    bool ret = false;
     int out_len, final_len;
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {
+        TapLanSecLogError("EVP_CIPHER_CTX_new() failed.");
         return false;
     }
     if (EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), nullptr, key.aesKey, key.aesKey) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return false;
+        TapLanSecLogError("EVP_DecryptInit_ex() failed.");
+        goto DecryptDataExit;
     }
     if (EVP_DecryptUpdate(ctx, data, &out_len, data, dataLen) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return false;
+        TapLanSecLogError("EVP_DecryptUpdate() failed.");
+        goto DecryptDataExit;
     }
     if (EVP_DecryptFinal_ex(ctx, data + out_len, &final_len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        return false;
+        TapLanSecLogError("EVP_DecryptFinal_ex() failed.");
+        goto DecryptDataExit;
     }
-    EVP_CIPHER_CTX_free(ctx);
     dataLen = out_len + final_len;
+DecryptDataExit:
+    EVP_CIPHER_CTX_free(ctx);
+    if (!ret) ++decryptDataErrCnt;
     return true;
 }

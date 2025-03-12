@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <functional>
 #include <cstring>
+#include <vector>
 #include "./tapLanSocket/tapLanSocket.hpp"
 #include "./tapLanDrive/tapLanDrive.hpp"
 #include "./tapLanDHCP/tapLanDHCP.hpp"
@@ -29,11 +30,12 @@ private:
     TapLanMACAddress myMAC;
     uint32_t myIP;
     bool isSecurity;
-    TapLanKey key;
-    std::thread threadRecvFromSocketAndForwardToTap, threadReadFromTapAndSendToSocket;
+    TapLanKey myKey;
+    bool isForwardSupport;
+    std::thread threadRecvFromUdpSocketAndForwardToTap, threadReadFromTapAndSendToSocket;
     std::thread threadKeepConnectedWithServer;
-    std::unordered_map<TapLanMACAddress, sockaddr_in6> macToIPv6Map;
-    void recvFromSocketAndForwardToTap();
+    void recvFromUdpSocketAndForwardToTap();
     void readFromTapAndSendToSocket();
-    void keepConnectedWithServer();
+    void handleDHCPMsgServer();
+    void handleDHCPMsgClient();
 };
