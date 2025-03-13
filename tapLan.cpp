@@ -44,8 +44,8 @@ TapLan::~TapLan() {
 void TapLan::readFromTapAndSendToSocket() {
     uint8_t tapRxBuffer[65536];
     while (run_flag) {
-        ssize_t readBytes = tapLanReadFromTapDevice(tapRxBuffer, sizeof(tapRxBuffer));
-        if (readBytes == -1)
+        ssize_t readBytes = tapLanReadFromTapDevice(tapRxBuffer, sizeof(tapRxBuffer), 5000);
+        if (readBytes <= 0)
             continue;
         if (readBytes <= ETHERNET_HEADER_LEN) {
             continue;
@@ -83,7 +83,10 @@ void TapLan::readFromTapAndSendToSocket() {
 
 void TapLan::recvFromUdpSocketAndForwardToTap() {
     uint8_t udpRxBuffer[65536];
+    TapLanPollFD pfd = {udp_fd, POLLIN, 0};
     while (run_flag) {
+        if (TapLanPoll(&pfd, 1, 5000) <= 0) 
+            continue;
         sockaddr_in6 srcAddr;
         socklen_t srcAddrLen = sizeof(srcAddr);
         ssize_t recvBytes = tapLanRecvFromUdpSocket(udpRxBuffer, sizeof(udpRxBuffer), (sockaddr*)&srcAddr, &srcAddrLen);
@@ -186,6 +189,7 @@ void TapLan::handleDHCPMsgServer() {
 
 void TapLan::handleDHCPMsgClient() {
     uint8_t msgBuffer[65536];
+    TapLanPollFD pfd = {tcp_fd, POLLIN, 0};
     while (run_flag) {
         // generate dhcp discover
         TapLanDHCPMessage& msg = (TapLanDHCPMessage&)msgBuffer;
@@ -195,6 +199,10 @@ void TapLan::handleDHCPMsgClient() {
             continue;
         ssize_t sendBytes = tapLanSendToTcpSocket(&msg, msgLen);
         // handle dhcp offer
+        if (TapLanPoll(&pfd, 1, 5000) <= 0) {
+            TapLanDHCPLogError("Server response timeout.");
+            continue;
+        }
         ssize_t recvBytes = tapLanRecvFromTcpSocket(&msg, 65536);
         if (recvBytes > 0) {
             if (isSecurity && !tapLanDecryptDataWithAes(msgBuffer, (size_t&)recvBytes, myKey))
@@ -215,11 +223,11 @@ void TapLan::handleDHCPMsgClient() {
                 return false;
             };
             while (true) {
-                std::this_thread::sleep_for(std::chrono::seconds(5));
                 if (isConnectToServer()) {
                     TapLanLogInfo("Reconnecting to server successful.");
                     break;
                 }
+                std::this_thread::sleep_for(std::chrono::seconds(5));
             }
         } else {
             // todo
@@ -293,14 +301,15 @@ bool TapLan::start() {
 bool TapLan::stop() {
     if (!run_flag) return false;
     run_flag = false;
-    tapLanCloseTapDevice();
-    tapLanCloseUdpSocket();
     if (threadReadFromTapAndSendToSocket.joinable())
         threadReadFromTapAndSendToSocket.join();
     if (threadRecvFromUdpSocketAndForwardToTap.joinable())
         threadRecvFromUdpSocketAndForwardToTap.join();
     if (threadKeepConnectedWithServer.joinable())
         threadKeepConnectedWithServer.join();
+    tapLanCloseTapDevice();
+    tapLanCloseUdpSocket();
+    tapLanCloseTcpSocket();
     TapLanLogInfo("TapLan %s has stopped.", (isServer? "server": "client"));
     return true;
 }

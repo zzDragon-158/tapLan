@@ -21,6 +21,7 @@
 #include    <sys/ioctl.h>                           // for ioctl, TUNSETIFF
 #include    <net/if.h>                              // for struct ifreq, IFNAMSIZ
 #include    <linux/if_tun.h>                        // for IFF_TAP, IFF_NO_PI;
+#include    <poll.h>                                // for poll, pollfd
 #define     TapLanDriveLogError(fmt, ...)           fprintf(stderr, "[TapLanDrive] [ERROR] " fmt "\n", ##__VA_ARGS__)
 #endif
 #define     TapLanDriveLogInfo(fmt, ...)            fprintf(stdout, "[TapLanDrive] [INFO] " fmt "\n", ##__VA_ARGS__)
@@ -43,4 +44,4 @@ bool tapLanOpenTapDevice();
 bool tapLanCloseTapDevice();
 bool tapLanGetMACAddress(uint8_t* buf, size_t bufLen);
 ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen);
-ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen);
+ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen, int timeout = -1);

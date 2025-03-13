@@ -212,24 +212,31 @@ ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen) {
     }
 }
 
-ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen) {
+ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen, int timeout) {
     static DWORD readBytes;
-    if (unlikely(ReadFile(tapLanTapDevice.handle, buf, bufLen, &readBytes, &tapLanTapDevice.overlapRead))) {
+    static uint8_t readStatus = 0;
+    if (unlikely(readStatus == 0 && ReadFile(tapLanTapDevice.handle, buf, bufLen, &readBytes, &tapLanTapDevice.overlapRead))) {
         ResetEvent(tapLanTapDevice.overlapRead.hEvent);
         ++drc;
         return readBytes;
-    } else {
+    }
+    if (readStatus == 0) {
+        readStatus = 1;
         DWORD lastError = GetLastError();
-        if (likely(lastError == ERROR_IO_PENDING)) {
-            GetOverlappedResult(tapLanTapDevice.handle, &tapLanTapDevice.overlapRead, &readBytes, TRUE);
-            ResetEvent(tapLanTapDevice.overlapRead.hEvent);
-            return readBytes;
-        } else {
+        if (unlikely(lastError != ERROR_IO_PENDING)) {
+            readStatus = 0;
             TapLanDriveLogError("Reading from tap device failed.");
             ++tapReadErrorCnt;
             return -1;
         }
     }
+    if (WAIT_OBJECT_0 == WaitForSingleObject(tapLanTapDevice.overlapRead.hEvent, timeout)) {
+        readStatus = 0;
+        GetOverlappedResult(tapLanTapDevice.handle, &tapLanTapDevice.overlapRead, &readBytes, FALSE);
+        ResetEvent(tapLanTapDevice.overlapRead.hEvent);
+        return readBytes;
+    }
+    return 0;
 }
 
 #else
@@ -243,7 +250,7 @@ bool tapLanOpenTapDevice() {
         if (system("ip link set dev tapLan up"))
             return false;
     }
-    tap_fd = open("/dev/net/tun", O_RDWR);
+    tap_fd = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
     if (tap_fd == -1) {
         TapLanDriveLogError("Can not open [/dev/net/tun].");
         return false;
@@ -287,7 +294,11 @@ ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen) {
     return writeBytes;
 }
 
-ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen) {
+ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen, int timeout) {
+    pollfd pfd = {tap_fd, POLLIN, 0};
+    if (poll(&pfd, 1, timeout) <= 0) {
+        return 0;
+    }
     ssize_t readBytes = read(tap_fd, buf, bufLen);
     if (unlikely(readBytes == -1)) {
         TapLanDriveLogError("Reading from tap device failed.");

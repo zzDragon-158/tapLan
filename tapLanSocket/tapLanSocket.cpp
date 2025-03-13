@@ -121,6 +121,18 @@ bool tapLanOpenTcpSocket(uint16_t port) {
             return false;
         }
     }
+    /* allow reuse addr and port */ {
+        int optval = 1;
+        int optlevel = (SO_REUSEADDR
+#ifndef _WIN32
+            | SO_REUSEPORT
+#endif
+        );
+        if (setsockopt(tcp_fd, SOL_SOCKET, optlevel, (char*)&optval, sizeof(optval))) {
+            TapLanSocketLogError("TCP setsockopt(SO_REUSEADDR) failed.");
+            return false;
+        }
+    }
     /* bind tcp socket */ {
         sockaddr_in6 sa;
         memset(&sa, 0, sizeof(sa));
