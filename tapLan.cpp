@@ -237,10 +237,10 @@ void TapLan::handleDHCPMsgClient() {
 }
 
 void TapLan::showErrorCount() {
-    fprintf(stdout, "tapWriteError: %llu [dwc: %llu]\n", tapWriteErrorCnt, dwc);
-    fprintf(stdout, "tapReadError: %llu [drc: %llu]\n", tapReadErrorCnt, drc);
-    fprintf(stdout, "udpSendError: %llu\n", udpSendErrCnt);
-    fprintf(stdout, "udpRecvError: %llu\n", udpRecvErrCnt);
+    fprintf(stdout, "tapWriteError: %lu [dwc: %lu]\n", tapWriteErrorCnt, dwc);
+    fprintf(stdout, "tapReadError: %lu [drc: %lu]\n", tapReadErrorCnt, drc);
+    fprintf(stdout, "udpSendError: %lu\n", udpSendErrCnt);
+    fprintf(stdout, "udpRecvError: %lu\n", udpRecvErrCnt);
     fflush(stdout);
 }
 

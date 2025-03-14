@@ -82,7 +82,7 @@ bool tapLanCloseUdpSocket() {
 ssize_t tapLanSendToUdpSocket(const void* buf, size_t bufLen, const sockaddr* dstAddr, socklen_t addrLen) {
     ssize_t sendBytes = sendto(udp_fd, (const char*)buf, bufLen, 0, dstAddr, addrLen);
     if (unlikely(sendBytes < bufLen)) {
-        TapLanSocketLogError("UDP sendBytes[%lld] is less than expected[%lld].", sendBytes, bufLen);
+        TapLanSocketLogError("UDP sendBytes[%ld] is less than expected[%ld].", sendBytes, bufLen);
         ++udpSendErrCnt;
     }
     return sendBytes;
@@ -183,7 +183,7 @@ bool tapLanConnect(const sockaddr* addr, socklen_t addrlen) {
 ssize_t tapLanSendToTcpSocket(const void* buf, size_t bufLen, TapLanSocket dest) {
     ssize_t sendBytes = send(dest, (const char*)buf, bufLen, 0);
     if (unlikely(sendBytes < bufLen)) {
-        TapLanSocketLogError("TCP sendBytes[%lld] is less than expected[%lld].", sendBytes, bufLen);
+        TapLanSocketLogError("TCP sendBytes[%ld] is less than expected[%ld].", sendBytes, bufLen);
     }
     return sendBytes;
 }

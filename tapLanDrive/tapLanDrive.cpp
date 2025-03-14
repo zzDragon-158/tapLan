@@ -200,7 +200,7 @@ ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen) {
             GetOverlappedResult(tapLanTapDevice.handle, &tapLanTapDevice.overlapWrite, &writeBytes, TRUE);
             ResetEvent(tapLanTapDevice.overlapWrite.hEvent);
             if (unlikely(writeBytes < bufLen)) {
-                TapLanDriveLogError("writeBytes[%lld] is less than expected[%lu].", writeBytes, bufLen);
+                TapLanDriveLogError("writeBytes[%ld] is less than expected[%lu].", writeBytes, bufLen);
                 ++tapWriteErrorCnt;
             }
             return writeBytes;
@@ -288,7 +288,7 @@ bool tapLanGetMACAddress(uint8_t* buf, size_t bufLen) {
 ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen) {
     ssize_t writeBytes = write(tap_fd, buf, bufLen);
     if (unlikely(writeBytes < bufLen)) {
-        TapLanDriveLogError("writeBytes[%lld] is less than expected[%lu].", writeBytes, bufLen);
+        TapLanDriveLogError("writeBytes[%ld] is less than expected[%lu].", writeBytes, bufLen);
         ++tapWriteErrorCnt;
     }
     return writeBytes;
