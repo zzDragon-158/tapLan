@@ -29,8 +29,8 @@ struct TapLanKey {
         return *this;
     }
 };
-extern int encryptDataErrCnt;
-extern int decryptDataErrCnt;
+extern uint64_t encryptDataErrCnt;
+extern uint64_t decryptDataErrCnt;
 
 bool tapLanEncryptDataWithAes(uint8_t* data, size_t& dataLen, const TapLanKey& key);
 bool tapLanDecryptDataWithAes(uint8_t* data, size_t& dataLen, const TapLanKey& key);

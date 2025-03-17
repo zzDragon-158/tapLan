@@ -1,7 +1,7 @@
 #include "tapLanSecurity.hpp"
 
-int encryptDataErrCnt = 0;
-int decryptDataErrCnt = 0;
+uint64_t encryptDataErrCnt = 0;
+uint64_t decryptDataErrCnt = 0;
 
 bool tapLanEncryptDataWithAes(uint8_t* data, size_t& dataLen, const TapLanKey& key) {
     bool ret = false;

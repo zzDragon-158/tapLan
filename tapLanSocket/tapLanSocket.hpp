@@ -38,4 +38,3 @@ TapLanSocket tapLanAccept(sockaddr* addr, socklen_t *addrlen);
 bool tapLanConnect(const sockaddr* addr, socklen_t addrlen);
 ssize_t tapLanSendToTcpSocket(const void* buf, size_t bufLen, TapLanSocket dest = tcp_fd);
 ssize_t tapLanRecvFromTcpSocket(void* buf, size_t bufLen, TapLanSocket src = tcp_fd);
-int tapLanPoll();

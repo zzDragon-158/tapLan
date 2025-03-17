@@ -5,8 +5,6 @@
 
 uint64_t tapWriteErrorCnt = 0;
 uint64_t tapReadErrorCnt = 0;
-uint64_t dwc = 0;
-uint64_t drc = 0;
 
 #ifdef _WIN32
 struct WinAdapterInfo {
@@ -192,7 +190,6 @@ ssize_t tapLanWriteToTapDevice(const void* buf, size_t bufLen) {
     static DWORD writeBytes;
     if (unlikely(WriteFile(tapLanTapDevice.handle, buf, bufLen, &writeBytes, &tapLanTapDevice.overlapWrite))) {
         ResetEvent(tapLanTapDevice.overlapWrite.hEvent);
-        ++dwc;
         return writeBytes;
     } else {
         DWORD lastError = GetLastError();
@@ -217,7 +214,6 @@ ssize_t tapLanReadFromTapDevice(void* buf, size_t bufLen, int timeout) {
     static uint8_t readStatus = 0;
     if (unlikely(readStatus == 0 && ReadFile(tapLanTapDevice.handle, buf, bufLen, &readBytes, &tapLanTapDevice.overlapRead))) {
         ResetEvent(tapLanTapDevice.overlapRead.hEvent);
-        ++drc;
         return readBytes;
     }
     if (readStatus == 0) {

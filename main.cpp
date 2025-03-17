@@ -5,6 +5,7 @@
 #include <getopt.h>
 
 bool isRunningAsAdmin();
+void printHelpInfo(const char* name);
 void tapLanExit(int code = 0, int64_t delaySeconds = 0);
 
 int main(int argc, char* argv[]) {
@@ -13,6 +14,7 @@ int main(int argc, char* argv[]) {
         tapLanExit(-1, 3);
     }
     bool isServer = true;
+    bool isDirectSupport = false;
     uint32_t netID = 3232298496;
     int netIDLen = 24;
     char serverAddr[INET6_ADDRSTRLEN] = "::ffff:";
@@ -20,7 +22,7 @@ int main(int argc, char* argv[]) {
     uint16_t port = 3460;
     const char* key = "";
     int opt;
-    while ((opt = getopt(argc, argv, "s:c:p:k:h")) != -1) {
+    while ((opt = getopt(argc, argv, "s:c:p:k:dh")) != -1) {
         switch (opt) {
             case 's': {
                 isServer = true;
@@ -68,10 +70,12 @@ int main(int argc, char* argv[]) {
             } case 'k': {
                 key = optarg;
                 break;
+            } case 'd': {
+                isDirectSupport = true;
+                break;
             } case 'h': {
-                printf("Usage as server: %s [-s <CIDR>] [-p <server port>] [-k <aes key>]\n", argv[0]);
-                printf("Usage as client: %s [-c <server address>] [-p <server port>] [-k <aes key>]\n", argv[0]);
-                tapLanExit(-1, 3);
+                printHelpInfo(argv[0]);
+                tapLanExit(-1, 0);
             }
         }
     }
@@ -80,7 +84,7 @@ int main(int argc, char* argv[]) {
         pTapLan = new TapLan(port, netID, netIDLen, key);
     } else {
         printf("server [%s]:%u\n", serverAddr, port);
-        pTapLan = new TapLan(serverAddr, port, key);
+        pTapLan = new TapLan(serverAddr, port, key, isDirectSupport);
     }
     if (!pTapLan->start())
         tapLanExit(-1, 3);
@@ -135,4 +139,17 @@ void tapLanExit(int code, int64_t delaySeconds) {
 #endif
 
     exit(code);
+}
+
+void printHelpInfo(const char* name){
+    printf("Usage as server: %s [-s <CIDR>] [-p <server port>] [-k <aes key>]\n", name);
+    printf("Usage as client: %s [-c <server address>] [-p <server port>] [-k <aes key>]\n", name);
+    printf("Server or Client:\n");
+    printf("    -p      <server port>       server port to listen on/connect to <server port>\n");
+    printf("    -k      <key>               use <key>(ASE-128) to encrypto data\n");
+    printf("Server specific:\n");
+    printf("    -s      <CIDR>              run in server mode, allocate ipv4 address within <CIDR>\n");
+    printf("Client specific:\n");
+    printf("    -c      <server address>    run in client mode, connect to <server address>");
+    printf("    -d                          all data will be sent directly to the destination instead of the server\n");
 }

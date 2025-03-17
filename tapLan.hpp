@@ -15,7 +15,7 @@
 class TapLan {
 public:
     TapLan(uint16_t serverPort, uint32_t netID, int netIDLen, const char* key);      // server
-    TapLan(const char* serverAddr, const uint16_t serverPort, const char* key);      // client
+    TapLan(const char* serverAddr, const uint16_t serverPort, const char* key, bool isDirectSupport);      // client
     ~TapLan();
     void showErrorCount();
     void showFIB();
@@ -31,7 +31,7 @@ private:
     uint32_t myIP;
     bool isSecurity;
     TapLanKey myKey;
-    bool isForwardSupport;
+    bool isDirectSupport;
     std::thread threadRecvFromUdpSocketAndForwardToTap, threadReadFromTapAndSendToSocket;
     std::thread threadKeepConnectedWithServer;
     void recvFromUdpSocketAndForwardToTap();

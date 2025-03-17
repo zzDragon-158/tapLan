@@ -37,8 +37,6 @@ struct ether_header {
 
 extern uint64_t tapWriteErrorCnt;
 extern uint64_t tapReadErrorCnt;
-extern uint64_t dwc;
-extern uint64_t drc;
 
 bool tapLanOpenTapDevice();
 bool tapLanCloseTapDevice();
