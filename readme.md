@@ -11,8 +11,8 @@
     make
 
 # 运行
-## 创建TAP设备
-windows安装WinTapDrive文件夹下的驱动(OpenVPN的开源驱动)，linux跳过这一步
+## 运行前检查
+检查驱动文件(OemVista.inf, tap0901.cat, tap0901.sys, tapinstall.exe)与本项目的可执行文件是否处于同一文件夹下(如果不在则程序运行时会有提示)
 
 ## 运行程序
     # 必须以管理员或者root用户运行程序
