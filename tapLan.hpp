@@ -14,7 +14,7 @@
 
 class TapLan {
 public:
-    TapLan(uint16_t serverPort, uint32_t netID, int netIDLen, const char* key);      // server
+    TapLan(uint16_t serverPort, uint32_t netID, uint8_t netIDLen, const char* key);      // server
     TapLan(const char* serverAddr, const uint16_t serverPort, const char* key, bool isDirectSupport);      // client
     ~TapLan();
     void showErrorCount();
@@ -25,16 +25,16 @@ public:
 private:
     bool run_flag;
     bool isServer;
-    uint32_t netID;
-    int netIDLen;
+    uint32_t networkID;
+    uint8_t networkIDLen;
     TapLanMACAddress myMAC;
     uint32_t myIP;
     bool isSecurity;
     TapLanKey myKey;
     bool isDirectSupport;
-    std::thread threadRecvFromUdpSocketAndForwardToTap, threadReadFromTapAndSendToSocket;
+    std::thread threadRecvFromUdpSocketAndWriteToTap, threadReadFromTapAndSendToSocket;
     std::thread threadKeepConnectedWithServer;
-    void recvFromUdpSocketAndForwardToTap();
+    void recvFromUdpSocketAndWriteToTap();
     void readFromTapAndSendToSocket();
     void handleDHCPMsgServer();
     void handleDHCPMsgClient();

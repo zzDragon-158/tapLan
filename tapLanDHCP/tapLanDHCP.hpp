@@ -24,18 +24,17 @@
 struct TapLanDHCPMessage {
     uint8_t     op;                 // 消息类型: 1=请求, 2=应答
     uint8_t     mac[6];             // 客户端 MAC 地址
-    uint8_t     netIDLen;           // 网络号长度
-    uint32_t    ipv4addr;               // 分配的 IP
-    uint32_t    FIBLen;             // FIB长度
-    uint8_t     paddings[16];
+    uint8_t     netlen;             // 网络号长度
+    uint32_t    ipv4addr;           // 分配的 IP
+    uint32_t    nodelen;            // 节点长度
 };
-struct TapLanFIBElement {
-    in6_addr    sin6_addr;
-    uint16_t    sin6_port;
+struct TapLanNodeInfo {
+    in6_addr    ipv6addr;
+    uint16_t    ipv6port;
     uint32_t    ipv4addr;
     uint8_t     mac[6];
-    uint8_t     dhcp_status;
-    uint8_t     paddings[3];
+    uint16_t    status;
+    uint8_t     paddings[2];
 };
 #pragma pack(pop)
 struct TapLanMACAddress {
@@ -76,10 +75,7 @@ enum TapLanDHCPStatus {
 };
 
 extern sockaddr_in6 gatewayAddr;
-extern std::unordered_map<TapLanMACAddress, sockaddr_in6> macToSA6Map;
-extern std::unordered_map<TapLanMACAddress, uint32_t> macToIPv4Map;
-extern std::unordered_map<std::string, size_t> tapLanNodeStatus;
-extern std::vector<TapLanFIBElement> FIBTable;
+extern std::unordered_map<TapLanMACAddress, TapLanNodeInfo> macToNodeMap;
 
 /**
  * @brief 生成TapLanDHCPMessage Discover
@@ -110,10 +106,10 @@ bool tapLanHandleDHCPOffer(const TapLanDHCPMessage& msg);
 /**
  * @brief 通过mac地址获取IPv6套接字地址
  * @param mac [输入] 需要查找的mac地址
- * @param sa6 [输出] 对应的IPv6套接字地址
+ * @param addr [输出] 对应的IPv6套接字地址
  * @return hash表中不存在这个key时会返回false
  */
-bool tapLanGetSA6ByMAC(const TapLanMACAddress& mac, sockaddr_in6& sa6);
+bool tapLanGetNodeSA6ByMAC(const TapLanMACAddress& mac, sockaddr_in6& addr);
 
 /**
  * @brief 通过mac地址获取tapLanIPv4地址
@@ -121,21 +117,21 @@ bool tapLanGetSA6ByMAC(const TapLanMACAddress& mac, sockaddr_in6& sa6);
  * @param sa6 [输出] 对应的IPv6套接字地址
  * @return hash表中不存在这个key时会返回false
  */
-bool tapLanGetIPv4ByMAC(const TapLanMACAddress& mac, uint32_t& ipv4addr);
+bool tapLanGetNodeIPv4ByMAC(const TapLanMACAddress& mac, uint32_t& ipv4addr);
 
 /**
  * @brief 通过节点的ipv6地址来获取它的在线状态
  * @param ipv6 [输入] 节点的IPv6地址
  * @return 返回IPv6地址对应节点的在线状态，在线返回DHCP_STATUS_ONLINE，离线返回DHCP_STATUS_OFFLINE
  */
-uint8_t tapLanGetNodeStatusByIPv6(const std::string& ipv6);
+uint8_t tapLanGetNodeStatusByMAC(const TapLanMACAddress& mac);
 
 /**
  * @brief 设置IPv6地址对应节点的状态
- * @param ipv6 [输入] 节点的IPv6地址
+ * @param mac [输入] 节点的MAC地址
  * @return 节点存在时返回true
  */
-bool tapLanSetNodeStatusByIPv6(const std::string& ipv6, uint8_t status);
+bool tapLanSetNodeStatusByMAC(const TapLanMACAddress& mac, uint8_t status);
 
 /**
  * @brief 统一使用该API向macToSA6Map，macToIPv4Map，tapLanNodeStatus，FIBTable这些数据结构中添加节点以方便维护
@@ -156,3 +152,5 @@ inline std::string tapLanIPv6ntos(const in6_addr& ipv6addr) {
     inet_ntop(AF_INET6, &ipv6addr, ipv6str, INET6_ADDRSTRLEN);
     return std::string(ipv6str);
 }
+
+bool tapLanGetNodeByMAC(const TapLanMACAddress& mac, TapLanNodeInfo& node);

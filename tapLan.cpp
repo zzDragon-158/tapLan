@@ -1,17 +1,17 @@
 #include "tapLan.hpp"
 
-TapLan::TapLan(uint16_t serverPort, uint32_t netID, int netIDLen, const char* key) {   // server
+TapLan::TapLan(uint16_t serverPort, uint32_t netID, uint8_t netIDLen, const char* key) {   // server
     isServer = true;
-    this->netID = netID;
-    this->netIDLen = netIDLen;
+    networkID = netID;
+    networkIDLen = netIDLen;
     if (isSecurity = strcmp("", key))
         myKey = TapLanKey(key);
     run_flag = tapLanOpenTapDevice()
                 && tapLanOpenUdpSocket(serverPort)
                 && tapLanOpenTcpSocket(serverPort)
                 && tapLanListen(5);
-    if (this->run_flag) {
-        myIP = netID + 1;
+    if (run_flag) {
+        myIP = networkID + 1;
         tapLanGetMACAddress(myMAC.address, 6);
         tapLanAddNewNode({0}, myMAC, myIP, DHCP_STATUS_ONLINE);
     }
@@ -42,6 +42,11 @@ TapLan::~TapLan() {
 
 void TapLan::readFromTapAndSendToSocket() {
     uint8_t tapRxBuffer[65536];
+    ether_header eh;
+    sockaddr_in6 dstaddr;
+    memset(&dstaddr, 0, sizeof(dstaddr));
+    dstaddr.sin6_family = AF_INET6;
+    TapLanNodeInfo node;
     while (run_flag) {
         ssize_t readBytes = tapLanReadFromTapDevice(tapRxBuffer, sizeof(tapRxBuffer), 5000);
         if (readBytes <= 0)
@@ -49,44 +54,53 @@ void TapLan::readFromTapAndSendToSocket() {
         if (readBytes <= ETHERNET_HEADER_LEN) {
             continue;
         }
-        ether_header eh;
-        memcpy(&eh, tapRxBuffer, sizeof(ether_header));
+        memcpy(&eh, tapRxBuffer, sizeof(eh));
         if (isSecurity && !tapLanEncryptDataWithAes(tapRxBuffer, (size_t&)readBytes, myKey))
             continue;
         /* tapRxBuffer may be encrypted, so it is best not to do anything other than forwarding data */
         bool isBroadcast = eh.ether_dhost[0] & 0x01;
         if (isServer) {
             if (isBroadcast) {
-                for (auto it = macToSA6Map.begin(); it != macToSA6Map.end(); ++it) {
-                    if (DHCP_STATUS_OFFLINE == tapLanGetNodeStatusByIPv6(tapLanIPv6ntos(it->second.sin6_addr))
-                        || memcmp(&it->first.address, &eh.ether_shost, 6))
+                for (auto pair: macToNodeMap) {
+                    if (DHCP_STATUS_OFFLINE == pair.second.status
+                        || 0 == memcmp(&pair.first.address, &eh.ether_shost, 6)) {
+                        // 避免广播给离线节点或源节点
                         continue;
-                    tapLanSendToUdpSocket(tapRxBuffer, readBytes, (sockaddr*)&(it->second), sizeof(sockaddr_in6));
+                    }
+                    memcpy(&dstaddr.sin6_addr, &pair.second.ipv6addr, sizeof(dstaddr.sin6_addr));
+                    dstaddr.sin6_port = pair.second.ipv6port;
+                    tapLanSendToUdpSocket(tapRxBuffer, readBytes, (sockaddr*)&dstaddr, sizeof(dstaddr));
                 }
             } else {
-                sockaddr_in6 dstAddr;
-                if (tapLanGetSA6ByMAC(eh.ether_dhost, dstAddr)
-                    && DHCP_STATUS_ONLINE == tapLanGetNodeStatusByIPv6(tapLanIPv6ntos(dstAddr.sin6_addr))) {
-                    tapLanSendToUdpSocket(tapRxBuffer, readBytes, (const sockaddr*)&dstAddr, sizeof(sockaddr_in6));
-                }
+                if (!tapLanGetNodeByMAC(eh.ether_dhost, node) || DHCP_STATUS_OFFLINE == node.status)
+                    continue;
+                memcpy(&dstaddr.sin6_addr, &node.ipv6addr, sizeof(dstaddr.sin6_addr));
+                dstaddr.sin6_port = node.ipv6port;
+                tapLanSendToUdpSocket(tapRxBuffer, readBytes, (const sockaddr*)&dstaddr, sizeof(dstaddr));
             }
         } else {
             if (isDirectSupport && !isBroadcast) {
-                sockaddr_in6 dstAddr;
-                if (tapLanGetSA6ByMAC(eh.ether_dhost, dstAddr)
-                    && DHCP_STATUS_ONLINE == tapLanGetNodeStatusByIPv6(tapLanIPv6ntos(dstAddr.sin6_addr))) {
-                    tapLanSendToUdpSocket(tapRxBuffer, readBytes, (const sockaddr*)&dstAddr, sizeof(sockaddr_in6));
-                }
+                // 启用P2P传输模式且该帧不是以太网帧，直接发送给目的主机
+                if (!tapLanGetNodeByMAC(eh.ether_dhost, node) || DHCP_STATUS_OFFLINE == node.status)
+                    continue;
+                memcpy(&dstaddr.sin6_addr, &node.ipv6addr, sizeof(dstaddr.sin6_addr));
+                dstaddr.sin6_port = node.ipv6port;
+                tapLanSendToUdpSocket(tapRxBuffer, readBytes, (const sockaddr*)&dstaddr, sizeof(dstaddr));
             } else {
-                tapLanSendToUdpSocket(tapRxBuffer, readBytes, (const sockaddr*)&gatewayAddr, sizeof(sockaddr_in6));
+                tapLanSendToUdpSocket(tapRxBuffer, readBytes, (const sockaddr*)&gatewayAddr, sizeof(gatewayAddr));
             }
         }
     }
 }
 
-void TapLan::recvFromUdpSocketAndForwardToTap() {
+void TapLan::recvFromUdpSocketAndWriteToTap() {
     uint8_t udpRxBuffer[65536];
+    ether_header eh;
     TapLanPollFD pfd = {udp_fd, POLLIN, 0};
+    sockaddr_in6 dstaddr;
+    memset(&dstaddr, 0, sizeof(dstaddr));
+    dstaddr.sin6_family = AF_INET6;
+    TapLanNodeInfo node;
     while (run_flag) {
         if (TapLanPoll(&pfd, 1, 5000) <= 0) 
             continue;
@@ -101,10 +115,7 @@ void TapLan::recvFromUdpSocketAndForwardToTap() {
         if (recvBytes <= ETHERNET_HEADER_LEN) {
             continue;
         }
-        ether_header eh;
-        memcpy(&eh, udpRxBuffer, sizeof(ether_header));
-        if (DHCP_STATUS_OFFLINE == tapLanGetNodeStatusByIPv6(tapLanIPv6ntos(srcAddr.sin6_addr)))
-            continue;
+        memcpy(&eh, udpRxBuffer, sizeof(eh));
         bool isBroadcast = (eh.ether_dhost[0] & 0x01);
         bool isSendToMe = isBroadcast || (memcmp(&myMAC.address, &eh.ether_dhost, 6) == 0);
         if (isSendToMe) {
@@ -115,17 +126,20 @@ void TapLan::recvFromUdpSocketAndForwardToTap() {
         /* udpRxBuffer may be encrypted, so it is best not to do anything other than forwarding data */
         if (isServer) {
             if (isBroadcast) {
-                for (auto it = macToSA6Map.begin(); it != macToSA6Map.end(); ++it) {
-                    if (memcmp(&it->first.address, &eh.ether_shost, 6) == 0
-                        || memcmp(&it->first.address, &myMAC.address, 6) == 0)
+                for (auto pair: macToNodeMap) {
+                    if (0 == memcmp(&pair.first.address, &eh.ether_shost, 6)
+                        || 0 == memcmp(&pair.first.address, &myMAC.address, 6))
                         continue;
-                    tapLanSendToUdpSocket(udpRxBuffer, recvBytes, (sockaddr*)&(it->second), sizeof(sockaddr_in6));
+                    memcpy(&dstaddr.sin6_addr, &pair.second.ipv6addr, sizeof(dstaddr.sin6_addr));
+                    dstaddr.sin6_port = pair.second.ipv6port;
+                    tapLanSendToUdpSocket(udpRxBuffer, recvBytes, (sockaddr*)&dstaddr, sizeof(sockaddr_in6));
                 }
             } else if (!isSendToMe) {
-                sockaddr_in6 dstAddr;
-                if (tapLanGetSA6ByMAC(eh.ether_dhost, dstAddr)) {
-                    tapLanSendToUdpSocket(udpRxBuffer, recvBytes, (sockaddr*)&dstAddr, sizeof(sockaddr_in6));
-                }
+                if (!tapLanGetNodeByMAC(eh.ether_dhost, node) || DHCP_STATUS_OFFLINE == node.status)
+                    continue;
+                memcpy(&dstaddr.sin6_addr, &node.ipv6addr, sizeof(dstaddr.sin6_addr));
+                dstaddr.sin6_port = node.ipv6port;
+                tapLanSendToUdpSocket(udpRxBuffer, recvBytes, (sockaddr*)&dstaddr, sizeof(sockaddr_in6));
             }
         } else {
             // client support forward
@@ -137,8 +151,10 @@ void TapLan::handleDHCPMsgServer() {
     uint8_t msgBuffer[65536];
     std::vector<TapLanPollFD> pfds;
     std::vector<sockaddr_in6> addrs;
+    std::vector<TapLanMACAddress> macs;
     pfds.push_back({tcp_fd, POLLIN, 0});
     addrs.push_back({0});
+    macs.push_back(myMAC);
     while (run_flag) {
         int pollCnt = TapLanPoll(pfds.data(), pfds.size(), 5000);
         if (pollCnt < 0) {
@@ -155,6 +171,7 @@ void TapLan::handleDHCPMsgServer() {
                 TapLanLogInfo("%s is online.", tapLanIPv6ntos(clientAddr.sin6_addr).c_str());
                 pfds.push_back({client, POLLIN, 0});
                 addrs.push_back(clientAddr);
+                macs.push_back(TapLanMACAddress());
             }
         }
         std::vector<int> popList;
@@ -163,7 +180,7 @@ void TapLan::handleDHCPMsgServer() {
                 --pollCnt;
                 ssize_t recvBytes = tapLanRecvFromTcpSocket(msgBuffer, sizeof(msgBuffer), pfds[i].fd);
                 if (recvBytes == 0) {
-                    tapLanSetNodeStatusByIPv6(tapLanIPv6ntos(addrs[i].sin6_addr), DHCP_STATUS_OFFLINE);
+                    tapLanSetNodeStatusByMAC(macs[i], DHCP_STATUS_OFFLINE);
                     tapLanCloseTcpSocket(pfds[i].fd);
                     popList.push_back(i);
                     continue;
@@ -178,7 +195,8 @@ void TapLan::handleDHCPMsgServer() {
                 }
                 TapLanDHCPMessage& msg = (TapLanDHCPMessage&)msgBuffer;
                 size_t msgLen = sizeof(TapLanDHCPMessage);
-                if (tapLanHandleDHCPDiscover(netID, netIDLen, addrs[i], msg, msgLen)) {
+                if (tapLanHandleDHCPDiscover(networkID, networkIDLen, addrs[i], msg, msgLen)) {
+                    memcpy(&macs[i].address, &msg.mac, 6);
                     if (isSecurity && !tapLanEncryptDataWithAes((uint8_t*)&msg, msgLen, myKey))
                         continue;
                     tapLanSendToTcpSocket(&msg, msgLen, pfds[i].fd);
@@ -186,11 +204,10 @@ void TapLan::handleDHCPMsgServer() {
             }
         }
         for (int i = popList.size() - 1; i >= 0; --i) {
-            char ipv6buf[INET6_ADDRSTRLEN];
-            inet_ntop(AF_INET6, &addrs[popList[i]].sin6_addr, ipv6buf, INET6_ADDRSTRLEN);
-            TapLanLogInfo("%s is offline.", ipv6buf);
+            TapLanLogInfo("%s is offline.", tapLanIPv6ntos(addrs[popList[i]].sin6_addr).c_str());
             pfds.erase(pfds.begin() + popList[i]);
             addrs.erase(addrs.begin() + popList[i]);
+            macs.erase(macs.begin() + popList[i]);
         }
     }
 }
@@ -218,8 +235,8 @@ void TapLan::handleDHCPMsgClient() {
                 continue;
             if (tapLanHandleDHCPOffer(msg)) {
                 myIP = msg.ipv4addr;
-                netIDLen = msg.netIDLen;
-                netID = msg.ipv4addr & ~((1 << (32 - netIDLen)) - 1);
+                networkIDLen = msg.netlen;
+                networkID = msg.ipv4addr & ~((1 << (32 - networkIDLen)) - 1);
                 isConnected = true;
             }
         } else if (recvBytes == 0) {
@@ -265,26 +282,23 @@ void TapLan::showErrorCount() {
 void TapLan::showFIB() {
     fprintf(stdout, "status     tapLan MAC address    tapLan IP address    Public IP address\n");
   //fprintf(stdout, "offline    00:00:00:00:00:00     255.255.255.255      aaaa:bbbb:cccc:dddd:eeee:ffff:aaaa:bbbb");
-    for (const auto& pair : macToSA6Map) {
+    for (const auto& pair : macToNodeMap) {
         char tapmacbuf[32];
         sprintf(tapmacbuf, "%.2X:%.2X:%.2X:%.2X:%.2X:%.2X",
             pair.first.address[0], pair.first.address[1], pair.first.address[2], 
             pair.first.address[3], pair.first.address[4], pair.first.address[5]);
 
-        char ipv6buf[INET6_ADDRSTRLEN];
-        inet_ntop(AF_INET6, &pair.second.sin6_addr, ipv6buf, INET6_ADDRSTRLEN);
+        std::string ipv6str = tapLanIPv6ntos(pair.second.ipv6addr);
 
         char tapipbuf[INET_ADDRSTRLEN];
-        uint32_t ipAddr;
-        if (tapLanGetIPv4ByMAC(pair.first, ipAddr)) {
-            sprintf(tapipbuf, "%u.%u.%u.%u", ((ipAddr >> 24) & 0xff), ((ipAddr >> 16) & 0xff),
-                ((ipAddr >> 8) & 0xff), (ipAddr & 0xff));
-        }
+        uint32_t ipv4addr = pair.second.ipv4addr;
+        sprintf(tapipbuf, "%u.%u.%u.%u", ((ipv4addr >> 24) & 0xff), ((ipv4addr >> 16) & 0xff),
+            ((ipv4addr >> 8) & 0xff), (ipv4addr & 0xff));
 
         char buf[128];
         sprintf(buf, "%-11s%-22s%-21s[%s]:%u\n",
-            (tapLanGetNodeStatusByIPv6(tapLanIPv6ntos(pair.second.sin6_addr)) == DHCP_STATUS_ONLINE? "ONLINE": "OFFLINE"),
-            tapmacbuf, tapipbuf, ipv6buf, ntohs(pair.second.sin6_port));
+            (DHCP_STATUS_ONLINE == pair.second.status? "ONLINE": "OFFLINE"),
+            tapmacbuf, tapipbuf, ipv6str.c_str(), ntohs(pair.second.ipv6port));
         fprintf(stdout, "%s", buf);
     }
     fflush(stdout);
@@ -293,22 +307,22 @@ void TapLan::showFIB() {
 bool TapLan::start() {
     if (!run_flag) return false;
     threadReadFromTapAndSendToSocket = std::thread(std::bind(&TapLan::readFromTapAndSendToSocket, this));
-    threadRecvFromUdpSocketAndForwardToTap = std::thread(std::bind(&TapLan::recvFromUdpSocketAndForwardToTap, this));
+    threadRecvFromUdpSocketAndWriteToTap = std::thread(std::bind(&TapLan::recvFromUdpSocketAndWriteToTap, this));
     TapLanLogInfo("TapLan %s is running.", (isServer? "server": "client"));
     if (isServer) {
         std::ostringstream cmd;
-        in_addr ipAddr;
-        ipAddr.s_addr = htonl(myIP);
+        in_addr ipv4addr;
+        ipv4addr.s_addr = htonl(myIP);
 #ifdef _WIN32
-        cmd << "netsh interface ip set address \"tapLan\" static " << inet_ntoa(ipAddr) << "/" << +netIDLen;
+        cmd << "netsh interface ip set address \"tapLan\" static " << inet_ntoa(ipv4addr) << "/" << +networkIDLen;
 #else
         cmd << "ip addr flush dev tapLan\n";
-        cmd << "ip addr add " << inet_ntoa(ipAddr) << "/" << +netIDLen << " dev tapLan";
+        cmd << "ip addr add " << inet_ntoa(ipv4addr) << "/" << +networkIDLen << " dev tapLan";
 #endif
         if (system(cmd.str().c_str())) {
-            TapLanLogError("Setting tapLan IP address to %s/%d failed.", inet_ntoa(ipAddr), netIDLen);
+            TapLanLogError("Setting tapLan IP address to %s/%d failed.", inet_ntoa(ipv4addr), networkIDLen);
         } else {
-            TapLanLogInfo("tapLan IP address has been set to %s/%d.", inet_ntoa(ipAddr), netIDLen);
+            TapLanLogInfo("tapLan IP address has been set to %s/%d.", inet_ntoa(ipv4addr), networkIDLen);
         }
         threadKeepConnectedWithServer = std::thread(std::bind(&TapLan::handleDHCPMsgServer, this));
     } else {
@@ -322,8 +336,8 @@ bool TapLan::stop() {
     run_flag = false;
     if (threadReadFromTapAndSendToSocket.joinable())
         threadReadFromTapAndSendToSocket.join();
-    if (threadRecvFromUdpSocketAndForwardToTap.joinable())
-        threadRecvFromUdpSocketAndForwardToTap.join();
+    if (threadRecvFromUdpSocketAndWriteToTap.joinable())
+        threadRecvFromUdpSocketAndWriteToTap.join();
     if (threadKeepConnectedWithServer.joinable())
         threadKeepConnectedWithServer.join();
     tapLanCloseTapDevice();

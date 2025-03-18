@@ -269,7 +269,7 @@ bool tapLanOpenTapDevice() {
 
 bool tapLanCloseTapDevice() {
     close(tap_fd);
-    system("ip link del dev tapLan");
+    // system("ip link del dev tapLan");
     return true;
 }
 
