@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
     bool isServer = true;
     bool isDirectSupport = false;
     uint32_t netID = 3232298496;
-    int netIDLen = 24;
+    uint8_t netIDLen = 24;
     char serverAddr[INET6_ADDRSTRLEN] = "::ffff:";
     size_t serverAddrOffset = strlen(serverAddr);
     uint16_t port = 3460;

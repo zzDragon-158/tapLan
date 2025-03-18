@@ -43,9 +43,11 @@ TapLan::~TapLan() {
 void TapLan::readFromTapAndSendToSocket() {
     uint8_t tapRxBuffer[65536];
     ether_header eh;
+
     sockaddr_in6 dstaddr;
     memset(&dstaddr, 0, sizeof(dstaddr));
     dstaddr.sin6_family = AF_INET6;
+
     TapLanNodeInfo node;
     while (run_flag) {
         ssize_t readBytes = tapLanReadFromTapDevice(tapRxBuffer, sizeof(tapRxBuffer), 5000);

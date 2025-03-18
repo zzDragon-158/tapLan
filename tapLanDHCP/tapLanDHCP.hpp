@@ -104,12 +104,12 @@ bool tapLanHandleDHCPDiscover(const uint32_t& netID, const int& netIDLen, const 
 bool tapLanHandleDHCPOffer(const TapLanDHCPMessage& msg);
 
 /**
- * @brief 通过mac地址获取IPv6套接字地址
- * @param mac [输入] 需要查找的mac地址
- * @param addr [输出] 对应的IPv6套接字地址
- * @return hash表中不存在这个key时会返回false
+ * @brief 通过mac地址获取节点信息
+ * @param mac [输入] 节点的mac地址
+ * @param node [输出] 保存mac对应节点的信息
+ * @return mac对应节点存在时返回true，不存在返回false
  */
-bool tapLanGetNodeSA6ByMAC(const TapLanMACAddress& mac, sockaddr_in6& addr);
+bool tapLanGetNodeByMAC(const TapLanMACAddress& mac, TapLanNodeInfo& node);
 
 /**
  * @brief 通过mac地址获取tapLanIPv4地址
@@ -118,13 +118,6 @@ bool tapLanGetNodeSA6ByMAC(const TapLanMACAddress& mac, sockaddr_in6& addr);
  * @return hash表中不存在这个key时会返回false
  */
 bool tapLanGetNodeIPv4ByMAC(const TapLanMACAddress& mac, uint32_t& ipv4addr);
-
-/**
- * @brief 通过节点的ipv6地址来获取它的在线状态
- * @param ipv6 [输入] 节点的IPv6地址
- * @return 返回IPv6地址对应节点的在线状态，在线返回DHCP_STATUS_ONLINE，离线返回DHCP_STATUS_OFFLINE
- */
-uint8_t tapLanGetNodeStatusByMAC(const TapLanMACAddress& mac);
 
 /**
  * @brief 设置IPv6地址对应节点的状态
@@ -152,5 +145,3 @@ inline std::string tapLanIPv6ntos(const in6_addr& ipv6addr) {
     inet_ntop(AF_INET6, &ipv6addr, ipv6str, INET6_ADDRSTRLEN);
     return std::string(ipv6str);
 }
-
-bool tapLanGetNodeByMAC(const TapLanMACAddress& mac, TapLanNodeInfo& node);

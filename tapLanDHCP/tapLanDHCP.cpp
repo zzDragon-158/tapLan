@@ -83,18 +83,6 @@ bool tapLanHandleDHCPOffer(const TapLanDHCPMessage& msg) {
     return true;
 }
 
-bool tapLanGetNodeSA6ByMAC(const TapLanMACAddress& mac, sockaddr_in6& addr) {
-    memset(&addr, 0, sizeof(addr));
-    auto it = macToNodeMap.find(mac);
-    if (it != macToNodeMap.end()) {
-        addr.sin6_family = AF_INET6;
-        memcpy(&addr.sin6_addr, &it->second.ipv6addr, sizeof(addr.sin6_addr));
-        addr.sin6_port = it->second.ipv6port;
-        return true;
-    }
-    return false;
-}
-
 bool tapLanGetNodeIPv4ByMAC(const TapLanMACAddress& mac, uint32_t& ipv4addr) {
     auto it = macToNodeMap.find(mac);
     if (it != macToNodeMap.end()) {
@@ -102,14 +90,6 @@ bool tapLanGetNodeIPv4ByMAC(const TapLanMACAddress& mac, uint32_t& ipv4addr) {
         return true;
     }
     return false;
-}
-
-uint8_t tapLanGetNodeStatusByMAC(const TapLanMACAddress& mac) {
-    auto it = macToNodeMap.find(mac);
-    if (it != macToNodeMap.end()) {
-        return it->second.status;
-    }
-    return DHCP_STATUS_OFFLINE;
 }
 
 bool tapLanSetNodeStatusByMAC(const TapLanMACAddress& mac, uint8_t status) {
