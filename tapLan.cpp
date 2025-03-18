@@ -96,17 +96,17 @@ void TapLan::readFromTapAndSendToSocket() {
 void TapLan::recvFromUdpSocketAndWriteToTap() {
     uint8_t udpRxBuffer[65536];
     ether_header eh;
-    TapLanPollFD pfd = {udp_fd, POLLIN, 0};
+
+    sockaddr_in6 srcaddr;
+    socklen_t srcAddrLen = sizeof(srcaddr);
+
     sockaddr_in6 dstaddr;
     memset(&dstaddr, 0, sizeof(dstaddr));
     dstaddr.sin6_family = AF_INET6;
+
     TapLanNodeInfo node;
     while (run_flag) {
-        if (TapLanPoll(&pfd, 1, 5000) <= 0) 
-            continue;
-        sockaddr_in6 srcAddr;
-        socklen_t srcAddrLen = sizeof(srcAddr);
-        ssize_t recvBytes = tapLanRecvFromUdpSocket(udpRxBuffer, sizeof(udpRxBuffer), (sockaddr*)&srcAddr, &srcAddrLen);
+        ssize_t recvBytes = tapLanRecvFromUdpSocket(udpRxBuffer, sizeof(udpRxBuffer), (sockaddr*)&srcaddr, &srcAddrLen);
         if (recvBytes == -1)
             continue;
         if (isSecurity && !tapLanDecryptDataWithAes(udpRxBuffer, (size_t&)recvBytes, myKey)) {

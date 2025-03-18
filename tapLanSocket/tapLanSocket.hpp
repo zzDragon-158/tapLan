@@ -9,6 +9,7 @@
 #include    <poll.h>                                // for poll
 #include    <unistd.h>                              // for close
 #include    <cstring>                               // for memset
+#include    <cerrno>                                // for errno
 #include    <sys/socket.h>                          // for socket
 #include    <arpa/inet.h>                           // for in6addr_any
 #define     TapLanSocketLogError(fmt, ...)          fprintf(stderr, "[TapLanSocket] [ERROR] " fmt "\n", ##__VA_ARGS__)

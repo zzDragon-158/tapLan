@@ -56,6 +56,15 @@ bool tapLanOpenUdpSocket(uint16_t port) {
             TapLanSocketLogError("UDP can not setsockopt(SO_SNDBUF) to %d.", udpBufferSize);
         }
     }
+    /* set timeout */ {
+        timeval timeout;
+        timeout.tv_sec = 5;
+        timeout.tv_usec = 0;
+        if (setsockopt(udp_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout))) {
+            TapLanSocketLogError("UDP can not setsockopt(SO_RCVTIMEO) to %lds%ldus.", timeout.tv_sec, timeout.tv_usec);
+            return false;
+        }
+    }
 #ifdef _WIN32
     /* windows bug: udp socket 10054 */ {
         BOOL bEnalbeConnRestError = FALSE;
@@ -91,8 +100,14 @@ ssize_t tapLanSendToUdpSocket(const void* buf, size_t bufLen, const sockaddr* ds
 ssize_t tapLanRecvFromUdpSocket(void* buf, size_t bufLen, sockaddr* srcAddr, socklen_t* addrLen) {
     ssize_t recvBytes = recvfrom(udp_fd, (char*)buf, bufLen, 0, srcAddr, addrLen);
     if (unlikely(recvBytes == -1)) {
-        TapLanSocketLogError("UDP receiving from UDP socket failed.");
-        ++udpRecvErrCnt;
+#ifdef _WIN32
+        if (WSAETIMEDOUT != WSAGetLastError()) {
+#else
+        if (errno != EAGAIN && errno != EWOULDBLOCK) {
+#endif
+            TapLanSocketLogError("UDP receiving from UDP socket failed.");
+            ++udpRecvErrCnt;
+        }
     }
     return recvBytes;
 }
