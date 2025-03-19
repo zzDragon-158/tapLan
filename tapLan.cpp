@@ -171,7 +171,7 @@ void TapLan::handleDHCPMsgServer() {
             TapLanSocket client = tapLanAccept((sockaddr*)&clientAddr, &clientAddrLen);
             if (client != -1) {
                 TapLanLogInfo("%s is online.", tapLanIPv6ntos(clientAddr.sin6_addr).c_str());
-                pfds.push_back({client, POLLIN | POLLHUP, 0});
+                pfds.push_back({client, POLLIN, 0});
                 addrs.push_back(clientAddr);
                 macs.push_back(TapLanMACAddress());
             }
@@ -181,7 +181,7 @@ void TapLan::handleDHCPMsgServer() {
             if (pfds[i].revents != 0) {
                 --pollCnt;
                 ssize_t recvBytes = tapLanRecvFromTcpSocket(msgBuffer, sizeof(msgBuffer), pfds[i].fd);
-                if (recvBytes == 0 || pfds[i].revents & POLLHUP) {
+                if (recvBytes == 0) {
                     tapLanSetNodeStatusByMAC(macs[i], DHCP_STATUS_OFFLINE);
                     tapLanCloseTcpSocket(pfds[i].fd);
                     popList.push_back(i);
@@ -217,7 +217,7 @@ void TapLan::handleDHCPMsgServer() {
 void TapLan::handleDHCPMsgClient() {
     bool isConnected = false;
     uint8_t msgBuffer[65536];
-    TapLanPollFD pfd = {tcp_fd, POLLIN | POLLHUP, 0};
+    TapLanPollFD pfd = {tcp_fd, POLLIN, 0};
     while (run_flag) {
         // generate dhcp discover
         TapLanDHCPMessage& msg = (TapLanDHCPMessage&)msgBuffer;
@@ -241,7 +241,7 @@ void TapLan::handleDHCPMsgClient() {
                 networkID = msg.ipv4addr & ~((1 << (32 - networkIDLen)) - 1);
                 isConnected = true;
             }
-        } else if (recvBytes == 0 || pfd.revents & POLLHUP) {
+        } else if (recvBytes == 0) {
             if (!isConnected) {
                 TapLanDHCPLogError("Trying to connect to server failed, maybe your input password is incorrect.");
             } else {

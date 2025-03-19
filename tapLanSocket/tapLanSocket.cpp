@@ -206,7 +206,16 @@ ssize_t tapLanSendToTcpSocket(const void* buf, size_t bufLen, TapLanSocket dest)
 ssize_t tapLanRecvFromTcpSocket(void* buf, size_t bufLen, TapLanSocket src) {
     ssize_t recvBytes = recv(src, (char*)buf, bufLen, 0);
     if (unlikely(recvBytes == -1)) {
-        TapLanSocketLogError("TCP receiving from TCP socket failed.");
+#ifdef _WIN32
+        int err = WSAGetLastError();
+        if (err == WSAECONNRESET || err == WSAETIMEDOUT) {
+#else
+        if (errno == ECONNRESET || errno == ETIMEDOUT) {
+#endif
+            recvBytes = 0;
+        } else {
+            TapLanSocketLogError("TCP receiving from TCP socket failed.");
+        }
     }
     return recvBytes;
 }
