@@ -138,6 +138,12 @@ static bool tapLanCreateTapDevice() {
             TapLanDriveLogError("Rename tap device failed.");
             break;
         }
+        cmd.str("");
+        cmd << "netsh interface ipv4 set subinterface \"" << TAP_NAME << "\" mtu=1418 store=persistent";
+        if (system(cmd.str().c_str())) {
+            TapLanDriveLogError("set tap device mtu to 1418 failed.");
+            break;
+        }
         strcpy(adapter.adapterName, TAP_NAME);
         adapter.adapterNameLen = strlen(TAP_NAME) + 1;
         memcpy(&tapLanTapDevice, &adapter, sizeof(WinAdapterInfo));
@@ -240,10 +246,12 @@ static int tap_fd;
 uint8_t macAddress[6];
 
 bool tapLanOpenTapDevice() {
-    if (system("ip link set dev tapLan up")) {
-        if (system("ip tuntap add dev tapLan mode tap"))
+    if (system("ip link set dev " TAP_NAME " up")) {
+        if (system("ip tuntap add dev " TAP_NAME " mode tap"))
             return false;
-        if (system("ip link set dev tapLan up"))
+        if (system("ip link set dev " TAP_NAME " up"))
+            return false;
+        if (system("ip link set dev " TAP_NAME " mtu 1418"))
             return false;
     }
     tap_fd = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
@@ -269,7 +277,7 @@ bool tapLanOpenTapDevice() {
 
 bool tapLanCloseTapDevice() {
     close(tap_fd);
-    // system("ip link del dev tapLan");
+    // system("ip link del dev " TAP_NAME);
     return true;
 }
 
